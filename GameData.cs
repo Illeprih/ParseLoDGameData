@@ -11,12 +11,14 @@ namespace ParseLoDGameData {
         static int equip_table_addr = 0x16879;
         static int map_encounters_addr = 0x2FE3C;
         static int map_encounter_slots_addr = 0x30E3C;
+        static int monster_names_ptr_addr = 0x168F0;
+        static int monster_names_addr = 0x14460;
 
         public static dynamic[] RipItems(byte[] S_ITEM) {
-            ulong[] item_desc_pointers = RipItemNameDescPTR(S_ITEM, item_desc_ptr_addr);
-            string[] item_desc = RipItemNameDesc(S_ITEM, item_desc_pointers, item_desc_addr, item_desc_ptr_addr);
-            ulong[] item_name_pointers = RipItemNameDescPTR(S_ITEM, item_name_ptr_addr);
-            string[] item_name = RipItemNameDesc(S_ITEM, item_name_pointers, item_name_addr, item_name_ptr_addr);
+            ulong[] item_desc_pointers = RipNameDescPTR(S_ITEM, item_desc_ptr_addr, 256);
+            string[] item_desc = RipNameDesc(S_ITEM, item_desc_pointers, item_desc_addr, item_desc_ptr_addr, 256);
+            ulong[] item_name_pointers = RipNameDescPTR(S_ITEM, item_name_ptr_addr, 256);
+            string[] item_name = RipNameDesc(S_ITEM, item_name_pointers, item_name_addr, item_name_ptr_addr, 256);
             byte[][] equip_stats = RipEquipTable(S_ITEM, equip_table_addr);
             dynamic[] item_list = new dynamic[256];
             for (int i = 0; i < 192; i++) {
@@ -25,25 +27,25 @@ namespace ParseLoDGameData {
             return item_list;
         }
 
-        static ulong[] RipItemNameDescPTR(byte[] S_ITEM, int start) {
-            byte[] data = S_ITEM.Skip(start).Take(0x400).ToArray();
-            ulong[] pointers = new ulong[256];
-            for (int i = 0; i < 256; i++) {
+        static ulong[] RipNameDescPTR(byte[] file, int start, int amount) {
+            byte[] data = file.Skip(start).Take(amount * 4).ToArray();
+            ulong[] pointers = new ulong[amount];
+            for (int i = 0; i < amount; i++) {
                 pointers[i] = BitConverter.ToUInt32(data, i * 4) - 0x80000000;
             }
             return pointers;
         }
 
-        static string[] RipItemNameDesc(byte[] S_ITEM, ulong[] pointers, int start, int ptr_start) {
+        static string[] RipNameDesc(byte[] file, ulong[] pointers, int start, int ptr_start, int amount) {
             int len = ptr_start - start;
-            byte[] data = S_ITEM.Skip(start).Take(len).ToArray();
+            byte[] data = file.Skip(start).Take(len).ToArray();
             ushort[] pairs = new ushort[len / 2];
             for (int i = 0; i < len / 2; i++) {
                 pairs[i] = BitConverter.ToUInt16(data, i * 2);
             }
-            string[] names = new string[256];
+            string[] names = new string[amount];
             int start_pos = (int)pointers[0];
-            for (int i = 0; i < 256; i++) {
+            for (int i = 0; i < amount; i++) {
                 string temp = "";
                 foreach (ushort letter in pairs.Skip(((int)pointers[i] - start_pos) / 2).ToArray()) {
                     if (letter == 41215) {
@@ -91,7 +93,14 @@ namespace ParseLoDGameData {
                 split[i] = temp;
             }
             return split;
+        }
         
+        static dynamic RipMonsters(byte[] S_BTLD) {
+            dynamic[] monsters = new dynamic[196];
+            ulong[] monster_name_pointers = RipNameDescPTR(S_BTLD, monster_names_ptr_addr, 196);
+            string[] monster_names = RipNameDesc(S_BTLD, item_desc_pointers, monster_names_addr, monster_names_ptr_addr, 196);
+            
+            return monsters;
         }
 
         public static string DecodeText(ushort letter) {
