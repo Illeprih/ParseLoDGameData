@@ -9,6 +9,8 @@ namespace ParseLoDGameData {
         static int item_name_ptr_addr = 0x1DFB4;
         static int item_name_addr = 0x1C698;
         static int equip_table_addr = 0x16879;
+        static int map_encounters_addr = 0x2FE3C;
+        static int map_encounter_slots_addr = 0x30E3C;
 
         public static dynamic[] RipItems(byte[] S_ITEM) {
             ulong[] item_desc_pointers = RipItemNameDescPTR(S_ITEM, item_desc_ptr_addr);
@@ -62,6 +64,34 @@ namespace ParseLoDGameData {
                 split[i] = data.Skip(i * 0x1C).Take(0x1C).ToArray();
             }
             return split;
+        }
+        
+        static byte[][] RipMapEncounters(byte[] SMAP, int addr) {
+            byte[] data = SMAP.Skip(addr).Take(4 * 900).ToArray();
+            byte[][] split = new byte[900][];
+            byte[] temp = new byte[3];
+            for (int i = 0; i < 900; i++) {
+                temp[0] = BitConverter.ToInt16(data, i * 4);
+                temp[1] = data[i * 4 + 1];
+                temp[2] = data[i * 4 + 2];
+                split[i] = temp;
+            }
+            return split;
+        }
+        
+        static byte[][] RipMapEncounterSlots(byte[] SMAP, int addr) {
+            byte[] data = SMAP.Skip(addr).Take(8 * 300).ToArray();
+            byte[][] split = new byte[300][];
+            byte[] temp = new byte[4];
+            for (int i = 0; i <300; i++) {
+                temp[0] = BitConverter.ToInt16(data i * 8);
+                temp[1] = BitConverter.ToInt16(data i * 8 + 2);
+                temp[2] = BitConverter.ToInt16(data i * 8 + 4);
+                temp[3] = BitConverter.ToInt16(data i * 8 + 6);
+                split[i] = temp;
+            }
+            return split;
+        
         }
 
         public static string DecodeText(ushort letter) {
