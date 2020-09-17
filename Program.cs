@@ -4,9 +4,11 @@ namespace ParseLoDGameData {
     class Program {
         static void Main(string[] args) {
             byte[] S_ITEM = BPE.Decompress("G:/Projekty/Disc 1 Extracted/OVL/S_ITEM.OV_");
-            dynamic[] item_list = GameData.RipItems(S_ITEM);
-            for (int i = 0; i < 192; i++) {
-                Console.WriteLine($"Item: {item_list[i].name} \nDescription: {item_list[i].description}\nType:{item_list[i].type}\n");
+            byte[] S_BTLD = BPE.Decompress("G:/Projekty/Disc 1 Extracted/OVL/S_BTLD.OV_");
+            dynamic[] itemList = GameData.RipItems(S_ITEM);
+            dynamic[] monsterList = GameData.RipMonsters(S_BTLD);
+            foreach (dynamic monster in monsterList) {
+                Console.WriteLine($"{monster.Name} \t\t {monster.UU2} {monster.UU3} {monster.UU4} {monster.UU5} {monster.UU7} {monster.UU8} {monster.UU9} {monster.UU10} {monster.UU11} {monster.UU12}");
             }
         }
     }
