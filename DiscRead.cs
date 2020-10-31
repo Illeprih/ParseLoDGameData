@@ -16,23 +16,32 @@ namespace ParseLoDGameData {
         public static void GetFiles(string fileName) {
             BinaryReader reader = new BinaryReader(File.Open(fileName, FileMode.Open));
             PVD = LocatePrimaryVolumeDescriptor(reader);
-            reader.BaseStream.Seek(PVD.rootDirectory.extentLocation * 2352, SeekOrigin.Begin);
-            if (!reader.ReadBytes(12).SequenceEqual(syncPattern)) {
-                throw new ArgumentException("Synchronization pattern not found. Incorrect file type.");
-            }
-            reader.ReadBytes(12);
-            root = DirectoryContents(reader);
-            Console.WriteLine("Files:");
+            
+            root = DirectoryContents(reader, PVD.rootDirectory.extentLocation);
             foreach( var d in root[1]) {
                 Console.WriteLine($"{d.fileIdentifier}");
             }
-            Console.WriteLine("Folders");
             foreach (var d in root[0]) {
+                string id = d.fileIdentifier;
                 Console.WriteLine(d.fileIdentifier);
+                foreach( var sub in d.subDirectory[1]) {
+                    Console.WriteLine("\t " + sub.fileIdentifier);
+                }
+                foreach (var sub in d.subDirectory[0]) {
+                    Console.WriteLine("\t " + sub.fileIdentifier);
+                    foreach (var subsub in sub.subDirectory[1]) {
+                        Console.WriteLine("\t\t " + subsub.fileIdentifier);
+                    }
+                }
             }
         }
 
-        public static List<dynamic>[] DirectoryContents(BinaryReader data) {
+        public static List<dynamic>[] DirectoryContents(BinaryReader data, uint location) {
+            data.BaseStream.Seek(location * 2352, SeekOrigin.Begin);
+            if (!data.ReadBytes(12).SequenceEqual(syncPattern)) {
+                throw new ArgumentException("Synchronization pattern not found. Incorrect file type.");
+            }
+            data.ReadBytes(12);
             List<dynamic> directories = new List<dynamic>();
             List<dynamic> files = new List<dynamic>();
             while (data.ReadByte() != 0) {
@@ -50,6 +59,9 @@ namespace ParseLoDGameData {
             var result = new List<dynamic>[] { directories, files };
             foreach(var file in files) {
                 file.GetData(data);
+            }
+            foreach(var directory in directories) {
+                directory.SetSubDirectory(data);
             }
             return result;
         }
@@ -110,6 +122,7 @@ namespace ParseLoDGameData {
             public byte volumeSetTerminatorType = 255;
             public string volumeSetTerminatorIdentifier = "CD001";
             public byte volumeSetTerminatorVersion = 1;
+
 
             public PrimaryVolumeDescriptor() {
 
@@ -182,6 +195,7 @@ namespace ParseLoDGameData {
             public string fileIdentifier = "A";
             public byte[] systemUse = new byte[0];
             public byte[] data = new byte[0];
+            public List<dynamic>[] subDirectory = new List<dynamic>[2];
 
 
             public DirectoryEntry() {
@@ -231,6 +245,10 @@ namespace ParseLoDGameData {
                     reader.ReadBytes(4); // error detection
                     reader.ReadBytes(276); // error correction
                 }
+            }
+
+            public void SetSubDirectory(BinaryReader reader) {
+                subDirectory = DirectoryContents(reader, extentLocation);
             }
 
 
