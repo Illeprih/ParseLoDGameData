@@ -6,8 +6,29 @@ using System.Text;
 
 namespace ParseLoDGameData {
     class DiscRead {
+        public static byte[] syncPattern = new byte[] { 0x0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0 };
+        public static byte[] PVDsubHeader = new byte[] { 0x0, 0x0, 0x9, 0x0, 0x0, 0x0, 0x9, 0x0 };
+        public static PrimaryVolumeDescriptor PVD = new PrimaryVolumeDescriptor();
+
+        public static PrimaryVolumeDescriptor LocatePrimaryVolumeDescriptor(BinaryReader data) {
+            if (!data.ReadBytes(12).SequenceEqual(syncPattern)) {
+                throw new ArgumentException("Synchronization pattern not found. Incorrect file type.");
+            }
+            data.ReadBytes(4);
+            byte[] subheader = data.ReadBytes(8);
+            while (!subheader.SequenceEqual(PVDsubHeader)) {
+                data.BaseStream.Seek(0x918, SeekOrigin.Current);
+                if (!data.ReadBytes(12).SequenceEqual(syncPattern)) {
+                    throw new ArgumentException("Synchronization pattern not found. Incorrect file type.");
+                }
+                data.ReadBytes(4);
+                subheader = data.ReadBytes(8);
+            }
+            data.BaseStream.Seek(-12, SeekOrigin.Current);
+            return new PrimaryVolumeDescriptor(data);
+        }
+
         public class PrimaryVolumeDescriptor {
-            public byte[] syncPattern = new byte[] { 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00};
             public UInt32 address = 0;
             public byte mode = 2;
             public byte[] subheader = new byte[] { 0x00, 0x00, 0x09, 0x00, 0x00, 0x00, 0x09, 0x00 };
@@ -26,6 +47,7 @@ namespace ParseLoDGameData {
             public UInt32 MPathTableLocation = 20;
             public UInt32 optionalMPathTableLocation = 21;
             // Directory entry for the root directory
+            public Directory rootDirectory = new Directory();
             public string volumeSetIdentifier = "DISC1                                                                                                                           ";
             public string publisherIdentifier = "SONY COMPUTER ENTERTAINMENT INC                                                                                                 ";
             public string dataPreparerIdentifier = "SONY COMPUTER ENTERTAINMENT INC                                                                                                 ";
@@ -46,10 +68,11 @@ namespace ParseLoDGameData {
             public string volumeSetTerminatorIdentifier = "CD001";
             public byte volumeSetTerminatorVersion = 1;
 
+            public PrimaryVolumeDescriptor() {
 
+            }
 
             public PrimaryVolumeDescriptor(BinaryReader data) {
-                syncPattern = data.ReadBytes(12);
                 byte[] tempAddress = new byte[4];
                 for (int i = 0; i < 3; i++) {
                     tempAddress[i] = data.ReadByte();
@@ -58,11 +81,11 @@ namespace ParseLoDGameData {
                 mode = data.ReadByte();
                 subheader = data.ReadBytes(8);
                 typeCode = data.ReadByte();
-                standardIdentifier = data.ReadChars(5).ToString();
+                standardIdentifier = new string(data.ReadChars(5));
                 version = data.ReadByte();
                 data.ReadByte(); // Unused
-                systemIdentifier = data.ReadChars(32).ToString();
-                volumeIdentifier = data.ReadChars(32).ToString();
+                systemIdentifier = new string(data.ReadChars(32));
+                volumeIdentifier = new string(data.ReadChars(32));
                 data.ReadBytes(8); // Unused
                 volumeSpaceSize = ReadUInt32LB(data);
                 data.ReadBytes(32); // Unused
@@ -74,14 +97,14 @@ namespace ParseLoDGameData {
                 optionalLPathTableLocation = data.ReadUInt32();
                 MPathTableLocation = BitConverter.ToUInt32(data.ReadBytes(4).Reverse().ToArray());
                 optionalMPathTableLocation = BitConverter.ToUInt32(data.ReadBytes(4).Reverse().ToArray());
-                data.ReadBytes(34); // Directory entry for the root directory
-                volumeSetIdentifier = data.ReadChars(128).ToString();
-                publisherIdentifier = data.ReadChars(128).ToString();
-                dataPreparerIdentifier = data.ReadChars(128).ToString();
-                applicationIdentifier = data.ReadChars(128).ToString();
-                copyrightFileIdentifier = data.ReadChars(38).ToString();
-                abstractFileIdentifier = data.ReadChars(36).ToString();
-                bibliographicFileIdentifier = data.ReadChars(37).ToString();
+                rootDirectory = new Directory(data);
+                volumeSetIdentifier = new string(data.ReadChars(128));
+                publisherIdentifier = new string(data.ReadChars(128));
+                dataPreparerIdentifier = new string(data.ReadChars(128));
+                applicationIdentifier = new string(data.ReadChars(128));
+                copyrightFileIdentifier = new string(data.ReadChars(38));
+                abstractFileIdentifier = new string(data.ReadChars(36));
+                bibliographicFileIdentifier = new string(data.ReadChars(37));
                 volumeCreation = new Date(data);
                 volumeModification = new Date(data);
                 volumeExpiration = new Date(data);
@@ -92,9 +115,11 @@ namespace ParseLoDGameData {
                 reserved = data.ReadBytes(653);
                 errorDetection = data.ReadBytes(4);
                 errorCorrection = data.ReadBytes(276);
+                data.ReadBytes(24); // syncPatter segment again
                 volumeSetTerminatorType = data.ReadByte();
-                volumeSetTerminatorIdentifier = data.ReadChars(5).ToString();
+                volumeSetTerminatorIdentifier = new string(data.ReadChars(5));
                 volumeSetTerminatorVersion = data.ReadByte();
+                data.BaseStream.Seek(0x911, SeekOrigin.Current);
             }
 
             
@@ -114,6 +139,11 @@ namespace ParseLoDGameData {
             public string fileIdentifier = "a;1";
             public byte[] systemUse = new byte[0];
 
+
+            public Directory() {
+
+            }
+
             public Directory(BinaryReader data) {
                 long position = data.BaseStream.Position;
                 recordLength = data.ReadByte();
@@ -126,7 +156,7 @@ namespace ParseLoDGameData {
                 interleaveGap = data.ReadByte();
                 volumeSequenceNumber = ReadUInt16LB(data);
                 identifierLength = data.ReadByte();
-                fileIdentifier = data.ReadChars(identifierLength).ToString();
+                fileIdentifier = new string(data.ReadChars(identifierLength));
                 if (identifierLength % 2 == 0) {
                     data.ReadByte(); // padding
                 }
@@ -191,13 +221,13 @@ namespace ParseLoDGameData {
             }
 
             public Date(BinaryReader segment) {
-                year = Convert.ToUInt16(segment.ReadChars(4).ToString());
-                month = Convert.ToByte(segment.ReadChars(2).ToString());
-                day = Convert.ToByte(segment.ReadChars(2).ToString());
-                hour = Convert.ToByte(segment.ReadChars(2).ToString());
-                minute = Convert.ToByte(segment.ReadChars(2).ToString());
-                second = Convert.ToByte(segment.ReadChars(2).ToString());
-                milisecond = Convert.ToByte(segment.ReadChars(2).ToString());
+                year = Convert.ToUInt16(new string(segment.ReadChars(4)));
+                month = Convert.ToByte(new string(segment.ReadChars(2)));
+                day = Convert.ToByte(new string(segment.ReadChars(2)));
+                hour = Convert.ToByte(new string(segment.ReadChars(2)));
+                minute = Convert.ToByte(new string(segment.ReadChars(2)));
+                second = Convert.ToByte(new string(segment.ReadChars(2)));
+                milisecond = Convert.ToByte(new string(segment.ReadChars(2)));
                 GMT = segment.ReadByte();
             }
         }
