@@ -16,7 +16,7 @@ namespace ParseLoDGameData {
             BinaryReader reader = new BinaryReader(File.Open(fileName, FileMode.Open));
             PVD = LocatePrimaryVolumeDescriptor(reader);
             
-            var root = DirectoryContents(reader, PVD.rootDirectory.extentLocation);
+            var root = DirectoryContents(reader, PVD.rootDirectory.extentLocation); // gets contents of root directory
             foreach( var d in root[1]) {
                 Console.WriteLine($"{d.fileIdentifier}");
             }
@@ -37,7 +37,7 @@ namespace ParseLoDGameData {
         }
 
         public static List<dynamic>[] DirectoryContents(BinaryReader data, uint location) {
-            data.BaseStream.Seek(location * 2352, SeekOrigin.Begin);
+            data.BaseStream.Seek(location * 2352, SeekOrigin.Begin); //seek start of the segment
             if (!data.ReadBytes(12).SequenceEqual(syncPattern)) {
                 throw new ArgumentException("Synchronization pattern not found. Incorrect file type.");
             }
@@ -48,20 +48,20 @@ namespace ParseLoDGameData {
                 data.BaseStream.Seek(-1, SeekOrigin.Current);
                 var temp = new DirectoryEntry(data);
                 if (!(temp.fileIdentifier == Convert.ToChar(0).ToString() || temp.fileIdentifier == Convert.ToChar(1).ToString())) {
-                    if (temp.fileIdentifier.EndsWith(";1")) {
+                    if (temp.fileIdentifier.EndsWith(";1")) { // files
                         files.Add(temp);
                     } else {
                         directories.Add(temp);
                     }
                 }
             }
-            data.BaseStream.Seek(2352 - data.BaseStream.Position % 2352, SeekOrigin.Current);
+            data.BaseStream.Seek(2352 - data.BaseStream.Position % 2352, SeekOrigin.Current); // seek end of current segment
             var result = new List<dynamic>[] { directories, files };
             foreach(var file in files) {
-                file.GetData(data);
+                file.GetData(data); // start reading data of each file
             }
             foreach(var directory in directories) {
-                directory.SetSubDirectory(data);
+                directory.SetSubDirectory(data); // recursion for each subfolder
             }
             return result;
         }
@@ -227,15 +227,15 @@ namespace ParseLoDGameData {
             }
 
             public void GetData(BinaryReader reader) {
-                reader.BaseStream.Seek(extentLocation * 2352, SeekOrigin.Begin);
+                reader.BaseStream.Seek(extentLocation * 2352, SeekOrigin.Begin); // get first data segment, rest is writen sequentially
                 data = new byte[dataLength];
                
-                for (int i = 0; i < Math.Ceiling((double)dataLength / 2048); i++) {
+                for (int i = 0; i < Math.Ceiling((double)dataLength / 2048); i++) { // get number of segments
                     if (!reader.ReadBytes(12).SequenceEqual(syncPattern)) {
                         throw new ArgumentException("Synchronization pattern not found. Incorrect file type.");
                     }
                     reader.ReadBytes(12);
-                    for (int j = 0; j < 2048; j++) {
+                    for (int j = 0; j < 2048; j++) { // read up to 2048 bytes of each segment
                         if (j + i * 2048 > dataLength - 1) {
                             break;
                         } else {
