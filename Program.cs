@@ -14,9 +14,7 @@ namespace ParseLoDGameData {
             }
             */
             string fileName = "D:/Program Files (x86)/ePSXe/Hry/The Legend of Dragoon/The Legend of Dragoon - Disc 1.bin";
-            BinaryReader reader = new BinaryReader(File.Open(fileName, FileMode.Open));
-            DiscRead.PrimaryVolumeDescriptor PVD = DiscRead.LocatePrimaryVolumeDescriptor(reader);
-            Console.WriteLine(PVD.volumeSetTerminatorIdentifier);
+            DiscRead.GetFiles(fileName);
         }
     }
 }

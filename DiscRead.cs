@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net.Http.Headers;
+using System.Reflection.PortableExecutable;
 using System.Text;
 
 namespace ParseLoDGameData {
@@ -9,6 +11,48 @@ namespace ParseLoDGameData {
         public static byte[] syncPattern = new byte[] { 0x0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0 };
         public static byte[] PVDsubHeader = new byte[] { 0x0, 0x0, 0x9, 0x0, 0x0, 0x0, 0x9, 0x0 };
         public static PrimaryVolumeDescriptor PVD = new PrimaryVolumeDescriptor();
+        public static List<dynamic>[] root = new List<dynamic>[2];
+
+        public static void GetFiles(string fileName) {
+            BinaryReader reader = new BinaryReader(File.Open(fileName, FileMode.Open));
+            PVD = LocatePrimaryVolumeDescriptor(reader);
+            reader.BaseStream.Seek(PVD.rootDirectory.extentLocation * 2352, SeekOrigin.Begin);
+            if (!reader.ReadBytes(12).SequenceEqual(syncPattern)) {
+                throw new ArgumentException("Synchronization pattern not found. Incorrect file type.");
+            }
+            reader.ReadBytes(12);
+            root = DirectoryContents(reader);
+            Console.WriteLine("Files:");
+            foreach( var d in root[1]) {
+                Console.WriteLine($"{d.fileIdentifier}");
+            }
+            Console.WriteLine("Folders");
+            foreach (var d in root[0]) {
+                Console.WriteLine(d.fileIdentifier);
+            }
+        }
+
+        public static List<dynamic>[] DirectoryContents(BinaryReader data) {
+            List<dynamic> directories = new List<dynamic>();
+            List<dynamic> files = new List<dynamic>();
+            while (data.ReadByte() != 0) {
+                data.BaseStream.Seek(-1, SeekOrigin.Current);
+                var temp = new DirectoryEntry(data);
+                if (!(temp.fileIdentifier == Convert.ToChar(0).ToString() || temp.fileIdentifier == Convert.ToChar(1).ToString())) {
+                    if (temp.fileIdentifier.EndsWith(";1")) {
+                        files.Add(temp);
+                    } else {
+                        directories.Add(temp);
+                    }
+                }
+            }
+            data.BaseStream.Seek(2352 - data.BaseStream.Position % 2352, SeekOrigin.Current);
+            var result = new List<dynamic>[] { directories, files };
+            foreach(var file in files) {
+                file.GetData(data);
+            }
+            return result;
+        }
 
         public static PrimaryVolumeDescriptor LocatePrimaryVolumeDescriptor(BinaryReader data) {
             if (!data.ReadBytes(12).SequenceEqual(syncPattern)) {
@@ -46,8 +90,7 @@ namespace ParseLoDGameData {
             public UInt32 optionalLPathTableLocation = 19;
             public UInt32 MPathTableLocation = 20;
             public UInt32 optionalMPathTableLocation = 21;
-            // Directory entry for the root directory
-            public Directory rootDirectory = new Directory();
+            public DirectoryEntry rootDirectory = new DirectoryEntry(); // Directory entry for the root directory
             public string volumeSetIdentifier = "DISC1                                                                                                                           ";
             public string publisherIdentifier = "SONY COMPUTER ENTERTAINMENT INC                                                                                                 ";
             public string dataPreparerIdentifier = "SONY COMPUTER ENTERTAINMENT INC                                                                                                 ";
@@ -97,7 +140,7 @@ namespace ParseLoDGameData {
                 optionalLPathTableLocation = data.ReadUInt32();
                 MPathTableLocation = BitConverter.ToUInt32(data.ReadBytes(4).Reverse().ToArray());
                 optionalMPathTableLocation = BitConverter.ToUInt32(data.ReadBytes(4).Reverse().ToArray());
-                rootDirectory = new Directory(data);
+                rootDirectory = new DirectoryEntry(data);
                 volumeSetIdentifier = new string(data.ReadChars(128));
                 publisherIdentifier = new string(data.ReadChars(128));
                 dataPreparerIdentifier = new string(data.ReadChars(128));
@@ -125,32 +168,33 @@ namespace ParseLoDGameData {
             
         }
 
-        public class Directory {
+        public class DirectoryEntry {
             public byte recordLength = 33;
             public byte extendedAttributeRecordLength = 0;
             public UInt32 extentLocation = 0;
             public UInt32 dataLength = 0;
-            public Directory.Date date = new Directory.Date( 0, 1, 1, 0, 0, 0, 0 );
+            public DirectoryEntry.Date date = new DirectoryEntry.Date( 0, 1, 1, 0, 0, 0, 0 );
             public byte fileFlags = 0;
             public byte interleavedSize = 0;
             public byte interleaveGap = 0;
             public UInt16 volumeSequenceNumber = 1;
             public byte identifierLength = 1;
-            public string fileIdentifier = "a;1";
+            public string fileIdentifier = "A";
             public byte[] systemUse = new byte[0];
+            public byte[] data = new byte[0];
 
 
-            public Directory() {
+            public DirectoryEntry() {
 
             }
 
-            public Directory(BinaryReader data) {
+            public DirectoryEntry(BinaryReader data) {
                 long position = data.BaseStream.Position;
                 recordLength = data.ReadByte();
                 extendedAttributeRecordLength = data.ReadByte();
                 extentLocation = ReadUInt32LB(data);
                 dataLength = ReadUInt32LB(data);
-                date = new Directory.Date(data);
+                date = new DirectoryEntry.Date(data);
                 fileFlags = data.ReadByte();
                 interleavedSize = data.ReadByte();
                 interleaveGap = data.ReadByte();
@@ -166,6 +210,27 @@ namespace ParseLoDGameData {
                 }
 
 
+            }
+
+            public void GetData(BinaryReader reader) {
+                reader.BaseStream.Seek(extentLocation * 2352, SeekOrigin.Begin);
+                data = new byte[dataLength];
+               
+                for (int i = 0; i < Math.Ceiling((double)dataLength / 2048); i++) {
+                    if (!reader.ReadBytes(12).SequenceEqual(syncPattern)) {
+                        throw new ArgumentException("Synchronization pattern not found. Incorrect file type.");
+                    }
+                    reader.ReadBytes(12);
+                    for (int j = 0; j < 2048; j++) {
+                        if (j + i * 2048 > dataLength - 1) {
+                            break;
+                        } else {
+                            data[j + i * 2048] = reader.ReadByte();
+                        }
+                    }
+                    reader.ReadBytes(4); // error detection
+                    reader.ReadBytes(276); // error correction
+                }
             }
 
 
