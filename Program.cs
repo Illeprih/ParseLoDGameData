@@ -14,7 +14,14 @@ namespace ParseLoDGameData {
             }
             */
             string fileName = "D:/Program Files (x86)/ePSXe/Hry/The Legend of Dragoon/The Legend of Dragoon - Disc 1.bin";
-            DiscRead.GetFiles(fileName);
+            var root = DiscRead.GetFiles(fileName);
+            byte[] S_ITEM = BPE.Decompress(root[0][1].subDirectory[1][5].data);
+            byte[] S_BTLD = BPE.Decompress(root[0][1].subDirectory[1][2].data);
+            dynamic[] itemList = GameData.RipItems(S_ITEM);
+            dynamic[] monsterList = GameData.RipMonsters(S_BTLD);
+            for (int i = 0; i < 192; i++) {
+                Console.WriteLine($"{itemList[i].Name} \t {itemList[i].Description}");
+            }
         }
     }
 }

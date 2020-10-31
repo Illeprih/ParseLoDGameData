@@ -11,13 +11,12 @@ namespace ParseLoDGameData {
         public static byte[] syncPattern = new byte[] { 0x0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0 };
         public static byte[] PVDsubHeader = new byte[] { 0x0, 0x0, 0x9, 0x0, 0x0, 0x0, 0x9, 0x0 };
         public static PrimaryVolumeDescriptor PVD = new PrimaryVolumeDescriptor();
-        public static List<dynamic>[] root = new List<dynamic>[2];
 
-        public static void GetFiles(string fileName) {
+        public static List<dynamic>[] GetFiles(string fileName) {
             BinaryReader reader = new BinaryReader(File.Open(fileName, FileMode.Open));
             PVD = LocatePrimaryVolumeDescriptor(reader);
             
-            root = DirectoryContents(reader, PVD.rootDirectory.extentLocation);
+            var root = DirectoryContents(reader, PVD.rootDirectory.extentLocation);
             foreach( var d in root[1]) {
                 Console.WriteLine($"{d.fileIdentifier}");
             }
@@ -34,6 +33,7 @@ namespace ParseLoDGameData {
                     }
                 }
             }
+            return root;
         }
 
         public static List<dynamic>[] DirectoryContents(BinaryReader data, uint location) {

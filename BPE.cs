@@ -5,8 +5,9 @@ using System.Text;
 
 namespace ParseLoDGameData {
     class BPE {
-        public static byte[] Decompress(string path) {
-            BinaryReader compressedFile = new BinaryReader(File.Open(path, FileMode.Open));
+        public static byte[] Decompress(byte[] file) {
+            BinaryReader compressedFile = new BinaryReader(new MemoryStream(file));
+            //BinaryReader compressedFile = new BinaryReader(File.Open(path, FileMode.Open));
             List<byte> decompressedBytes = new List<byte>();
             var size = compressedFile.ReadBytes(8);
             if (Encoding.Default.GetString(size).Contains("BPE")) {
