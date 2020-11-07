@@ -17,22 +17,6 @@ namespace ParseLoDGameData {
             PVD = LocatePrimaryVolumeDescriptor(reader);
             
             var root = DirectoryContents(reader, PVD.rootDirectory.extentLocation); // gets contents of root directory
-            foreach( var d in root[1]) {
-                Console.WriteLine($"{d.fileIdentifier}");
-            }
-            foreach (var d in root[0]) {
-                string id = d.fileIdentifier;
-                Console.WriteLine(d.fileIdentifier);
-                foreach( var sub in d.subDirectory[1]) {
-                    Console.WriteLine("\t " + sub.fileIdentifier);
-                }
-                foreach (var sub in d.subDirectory[0]) {
-                    Console.WriteLine("\t " + sub.fileIdentifier);
-                    foreach (var subsub in sub.subDirectory[1]) {
-                        Console.WriteLine("\t\t " + subsub.fileIdentifier);
-                    }
-                }
-            }
             return root;
         }
 
@@ -58,7 +42,9 @@ namespace ParseLoDGameData {
             data.BaseStream.Seek(2352 - data.BaseStream.Position % 2352, SeekOrigin.Current); // seek end of current segment
             var result = new List<dynamic>[] { directories, files };
             foreach(var file in files) {
-                file.GetData(data); // start reading data of each file
+                if (file.fileIdentifier != "MIX.DA;1") {
+                    file.GetData(data, file.fileIdentifier); // start reading data of each file
+                }
             }
             foreach(var directory in directories) {
                 directory.SetSubDirectory(data); // recursion for each subfolder
@@ -195,6 +181,7 @@ namespace ParseLoDGameData {
             public string fileIdentifier = "A";
             public byte[] systemUse = new byte[0];
             public byte[] data = new byte[0];
+            public byte[] decompressedData = new byte[0];
             public List<dynamic>[] subDirectory = new List<dynamic>[2];
 
 
@@ -226,13 +213,13 @@ namespace ParseLoDGameData {
 
             }
 
-            public void GetData(BinaryReader reader) {
+            public void GetData(BinaryReader reader, string fileID) {
                 reader.BaseStream.Seek(extentLocation * 2352, SeekOrigin.Begin); // get first data segment, rest is writen sequentially
                 data = new byte[dataLength];
                
                 for (int i = 0; i < Math.Ceiling((double)dataLength / 2048); i++) { // get number of segments
                     if (!reader.ReadBytes(12).SequenceEqual(syncPattern)) {
-                        throw new ArgumentException("Synchronization pattern not found. Incorrect file type.");
+                        throw new ArgumentException($"Synchronization pattern not found. Incorrect file type. {fileID}");
                     }
                     reader.ReadBytes(12);
                     for (int j = 0; j < 2048; j++) { // read up to 2048 bytes of each segment
