@@ -37,14 +37,22 @@ namespace ParseLoDGameData {
         static void Main(string[] args) {
             string fileName = "D:/Program Files (x86)/ePSXe/Hry/The Legend of Dragoon/The Legend of Dragoon - Disc 1.bin";
             //string fileName = "G:/Projekty/LoD Versions/JP/(PSX) The Legend Of Dragoon (CD1) (SCPS-10119).bin";
+            
             var root = DiscRead.GetFiles(fileName);
+            /*
             SetupFiles(root);
             
             dynamic[] itemList = GameData.RipItems(S_ITEM.decompressedData);
             dynamic[] monsterList = GameData.RipMonsters(S_BTLD.decompressedData);
-
+  
             for (int i = 0; i < 192; i++) {
                 Console.WriteLine($"{itemList[i].Name} \t {itemList[i].Description}");
+            }
+            */
+
+            DiscRead.RecalculateLBA(root, 0x17);
+            foreach (byte b in DiscRead.CreateDirectory(root, 0x16, 0x16)) {
+                Console.Write(b.ToString("X2") + " ");
             }
             
             

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net.Http.Headers;
+using System.Net.NetworkInformation;
 using System.Reflection.PortableExecutable;
 using System.Text;
 
@@ -238,6 +239,11 @@ namespace ParseLoDGameData {
                 subDirectory = DirectoryContents(reader, extentLocation);
             }
 
+            public byte[] CreateDate() {
+                var result = new byte[7];
+                return result;
+            }
+
 
             public class Date {
                 public UInt16 year = 0;
@@ -320,6 +326,76 @@ namespace ParseLoDGameData {
             } else {
                 throw new ArgumentException($"Little and Big Endian do not match {little}, {big}");
             }
+        }
+
+        public static byte[] WriteUInt32LB(uint value) {
+            var bytes = BitConverter.GetBytes(value);
+            var result = bytes.Concat(bytes.Reverse()).ToArray();
+            return result;
+        }
+
+        public static byte[] WriteUInt16LB (UInt16 value) {
+            var bytes = BitConverter.GetBytes(value);
+            var result = bytes.Concat(bytes.Reverse()).ToArray();
+            return result;
+        }
+
+        public static uint RecalculateLBA(List<dynamic>[] directory, uint i) {
+            foreach (var file in directory[1]) {
+                file.extentLocation = i;
+                i += (uint)Math.Ceiling((double)file.dataLength / 2048);
+            }
+
+            // recurse for subdirectories
+            
+            return i;
+        }
+
+        public static byte[] CreateDirectory(dynamic directory, uint currentIndex, uint parentIndex) {
+            byte[] result = new byte[2048];
+            BinaryWriter writer = new BinaryWriter(new MemoryStream(result));
+            writer.Write(CreateDirectoryEntry(Convert.ToChar(0).ToString(), currentIndex));
+            writer.Write(CreateDirectoryEntry(Convert.ToChar(1).ToString(), parentIndex));
+            foreach (dynamic dir in directory[0]) {
+                writer.Write(CreateDirectoryEntry(dir.fileIdentifier, dir.extentLocation));
+            }
+            foreach(dynamic file in directory[1]) {
+                writer.Write(CreateDirectoryEntry(file.fileIdentifier, file.extentLocation));
+            }
+
+            return result;
+        }
+
+        public static byte[] CreateDirectoryEntry(string name, uint index) {
+            byte len = (byte)(Math.Round((double)(47 + Encoding.ASCII.GetBytes(name).Length) / 2, MidpointRounding.AwayFromZero) * 2);
+            var result = new byte[len];
+            BinaryWriter writer = new BinaryWriter(new MemoryStream(result));
+            writer.Write(len);
+            writer.Seek(1, SeekOrigin.Current); //skip Extended Attribute Record Length
+            writer.Write(WriteUInt32LB(index));
+            writer.Write(WriteUInt32LB(2048));
+            writer.Seek(7, SeekOrigin.Current); //skip date for now
+            if (name.Contains(";1")) {
+                writer.Write((byte)0);
+            } else {
+                writer.Write((byte)2);
+            }
+            writer.Seek(2, SeekOrigin.Current); //skip interleave values
+            writer.Write(WriteUInt16LB(1));
+            writer.Write((byte)name.Length);
+            writer.Write(Encoding.ASCII.GetBytes(name));
+            if (name.Length % 2 == 0) {
+                writer.Write((byte)0); // padding
+            }
+            writer.Seek(4, SeekOrigin.Current);
+            if (name.Contains(";1")) {
+                writer.Write((byte)0x0D);
+            } else {
+                writer.Write((byte)0x8D);
+            }
+            writer.Write(4282453);
+
+            return result;
         }
     }
 }
