@@ -50,12 +50,13 @@ namespace ParseLoDGameData {
             }
             */
 
-            DiscRead.RecalculateLBA(root, 0x17);
-            foreach (byte b in DiscRead.CreateDirectory(root, 0x16, 0x16)) {
-                Console.Write(b.ToString("X2") + " ");
+            DiscRead.RecalculateLBA(root, 0x16);
+            using (BinaryWriter writer = new BinaryWriter(File.Open("LOD.BIN", FileMode.Create))) {
+                writer.Write(DiscRead.systemSegment);
+                DiscRead.Create(writer, root, 0x16, 0x16);
             }
-            
-            
+            //BinaryWriter writer = new BinaryWriter(new MemoryStream(res));
+            //DiscRead.Create(writer, root, 0x16, 0x16);
         }
 
         static void SetupFiles(List<dynamic>[] root) {

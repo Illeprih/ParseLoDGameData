@@ -11,7 +11,10 @@ namespace ParseLoDGameData {
     class DiscRead {
         public static byte[] syncPattern = new byte[] { 0x0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0 };
         public static byte[] PVDsubHeader = new byte[] { 0x0, 0x0, 0x9, 0x0, 0x0, 0x0, 0x9, 0x0 };
+        public static byte[] startSubHeader = new byte[] { 0x0, 0x0, 0x8, 0x0, 0x0, 0x0, 0x8, 0x0 };
+        public static byte[] endSubHeader = new byte[] { 0x0, 0x0, 0x89, 0x0, 0x0, 0x0, 0x89, 0x0 };
         public static PrimaryVolumeDescriptor PVD = new PrimaryVolumeDescriptor();
+        public static byte[] systemSegment = new byte[0xD350];
 
         public static List<dynamic>[] GetFiles(string fileName) {
             BinaryReader reader = new BinaryReader(File.Open(fileName, FileMode.Open));
@@ -54,6 +57,8 @@ namespace ParseLoDGameData {
         }
 
         public static PrimaryVolumeDescriptor LocatePrimaryVolumeDescriptor(BinaryReader data) {
+            systemSegment = data.ReadBytes(0xD350);
+            data.BaseStream.Seek(0, SeekOrigin.Begin);
             if (!data.ReadBytes(12).SequenceEqual(syncPattern)) {
                 throw new ArgumentException("Synchronization pattern not found. Incorrect file type.");
             }
@@ -341,19 +346,58 @@ namespace ParseLoDGameData {
         }
 
         public static uint RecalculateLBA(List<dynamic>[] directory, uint i) {
+            i++;
             foreach (var file in directory[1]) {
                 file.extentLocation = i;
                 i += (uint)Math.Ceiling((double)file.dataLength / 2048);
             }
 
-            // recurse for subdirectories
+            foreach (dynamic dir in directory[0]) {
+                dir.extentLocation = i;
+                List<dynamic>[] subdir = dir.subDirectory;
+                i = RecalculateLBA(subdir, i);
+            }
             
             return i;
         }
 
-        public static byte[] CreateDirectory(dynamic directory, uint currentIndex, uint parentIndex) {
-            byte[] result = new byte[2048];
+        public static void Create(BinaryWriter writer, List<dynamic>[] root, uint currentIndex, uint parentIndex) {
+            writer.Write(CreateDirectory(root, currentIndex, parentIndex));
+            foreach (dynamic file in root[1]) {
+                writer.Write(CreateData(file));
+            }
+            foreach( dynamic directory in root[0]) {
+                Create(writer, directory.subDirectory, directory.extentLocation, parentIndex); //parent index needs fix
+            }
+        }
+
+        public static byte[] CreateData(dynamic file) {
+            int blocks = (int)Math.Ceiling((double)file.dataLength / 2048);
+            byte[] result = new byte[blocks * 2352];
             BinaryWriter writer = new BinaryWriter(new MemoryStream(result));
+            BinaryReader reader = new BinaryReader(new MemoryStream(file.data));
+            for (int i = 0; i < blocks; i++) {
+                writer.Write(syncPattern);
+                writer.Seek(3, SeekOrigin.Current); //address to be filled in
+                writer.Write((byte)2); //mode
+                if (i == blocks - 1) {
+                    writer.Write(endSubHeader);
+                } else {
+                    writer.Write(startSubHeader);
+                }
+                writer.Write(reader.ReadBytes(2048));
+            }
+            return result;
+        }
+
+
+        public static byte[] CreateDirectory(dynamic directory, uint currentIndex, uint parentIndex) {
+            byte[] result = new byte[2352];
+            BinaryWriter writer = new BinaryWriter(new MemoryStream(result));
+            writer.Write(syncPattern);
+            writer.Seek(3, SeekOrigin.Current); //address to be filled in
+            writer.Write((byte)2); //mode
+            writer.Write(endSubHeader);
             writer.Write(CreateDirectoryEntry(Convert.ToChar(0).ToString(), currentIndex));
             writer.Write(CreateDirectoryEntry(Convert.ToChar(1).ToString(), parentIndex));
             foreach (dynamic dir in directory[0]) {
