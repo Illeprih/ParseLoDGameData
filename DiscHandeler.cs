@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Dynamic;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -52,6 +54,7 @@ namespace ParseLoDGameData {
                         result.Add(temp);
                     }
                 }
+                result = result.OrderBy(o => o.ExtentLocation).ToList();
                 reader.BaseStream.Seek(2352 - reader.BaseStream.Position % 2352, SeekOrigin.Current); // seek end of current segment
                 foreach (var children in result) {
                     if (children.Flags == 2) { // Folder
@@ -70,6 +73,13 @@ namespace ParseLoDGameData {
                     }
                 }
                 return result;
+            }
+
+            public void CreateDisk() {
+                using (BinaryWriter writer = new BinaryWriter(File.Open("LOD.BIN", FileMode.Create))) {
+                    writer.Write(systemSegment);
+                    writer.Write(primaryVolumeDescriptor.CreatePVD());
+                }
             }
         }
 
@@ -233,8 +243,71 @@ namespace ParseLoDGameData {
                     milisecond = Convert.ToByte(new string(reader.ReadChars(2)));
                     gmt = reader.ReadByte();
                 }
+
+                public byte[] CreateDate() {
+                    byte[] result = new byte[17];
+                    for (int i = 0; i < 15; i++) {
+                        result[i] = 0x20;
+                    }
+                    BinaryWriter writer = new BinaryWriter(new MemoryStream(result));
+                    writer.Write(Encoding.ASCII.GetBytes(year.ToString()));
+                    return result;
+                }
+            }
+
+            public byte[] CreatePVD() {
+                byte[] result = new byte[4704];
+                BinaryWriter writer = new BinaryWriter(new MemoryStream(result));
+                writer.Write(syncPattern);
+                writer.Write(new byte[] { 0x00, 0x00, 0x00 }); //Address ??
+                writer.Write(((byte)0x02));
+                writer.Write(pvdHeader);
+                writer.Write(type);
+                writer.Write(Encoding.ASCII.GetBytes(name));
+                writer.Write(version);
+                writer.Seek(1, SeekOrigin.Current);
+                writer.Write(Encoding.ASCII.GetBytes(systemName));
+                writer.Write(Encoding.ASCII.GetBytes(volumeName));
+                writer.Seek(8, SeekOrigin.Current);
+                writer.Write(WriteUInt32LB(volumeSize));
+                writer.Seek(32, SeekOrigin.Current);
+                writer.Write(WriteUInt16LB(volumeSetSize));
+                writer.Write(WriteUInt16LB(volumeSequenceNumber));
+                writer.Write(WriteUInt16LB(logicalBlockSize));
+                writer.Write(WriteUInt32LB(pathTableSize));
+                writer.Write(pathLLocation);
+                writer.Write(optionalPathLLocation);
+                writer.Write(BitConverter.GetBytes(pathMLocation).Reverse().ToArray());
+                writer.Write(BitConverter.GetBytes(optionalPathMLocation).Reverse().ToArray());
+                writer.Write(root.CreateDirectoryEntry());
+                writer.Write(Encoding.ASCII.GetBytes(volumeSetName));
+                writer.Write(Encoding.ASCII.GetBytes(publisherName));
+                writer.Write(Encoding.ASCII.GetBytes(dataPreparerName));
+                writer.Write(Encoding.ASCII.GetBytes(applicationName));
+                writer.Write(Encoding.ASCII.GetBytes(copyrightName));
+                writer.Write(Encoding.ASCII.GetBytes(abstractName));
+                writer.Write(Encoding.ASCII.GetBytes(bibliographicName));
+                writer.Seek(17, SeekOrigin.Current); // Dates
+                writer.Seek(17, SeekOrigin.Current);
+                writer.Seek(17, SeekOrigin.Current);
+                writer.Seek(17, SeekOrigin.Current);
+                writer.Write(fileStructureVersion);
+                writer.Seek(1, SeekOrigin.Current); // Unused
+                writer.Write(applicationUsed);
+                writer.Write(reserved);
+                writer.Seek(280, SeekOrigin.Current);
+                writer.Write(syncPattern);
+                writer.Seek(3, SeekOrigin.Current); // Address ??
+                writer.Write((byte)0x02);
+                writer.Write(endHeader);
+                writer.Write((byte)0xFF);
+                writer.Write(Encoding.ASCII.GetBytes(name));
+                writer.Write((byte)0x01);
+                return result;
             }
         }
+
+        
 
         public class PathTableEntry {
 
@@ -304,9 +377,31 @@ namespace ParseLoDGameData {
                 int left2Read = (int)(position + recordLength - reader.BaseStream.Position);
                 if (left2Read > 0) {
                     systemUse = reader.ReadBytes(left2Read);
+                } else {
+                    systemUse = new byte[0];
                 }
 
 
+            }
+
+            public byte[] CreateDirectoryEntry() {
+                byte[] result = new byte[recordLength];
+                BinaryWriter writer = new BinaryWriter(new MemoryStream(result));
+                writer.Write(recordLength);
+                writer.Write(extendedAttributeRecordLength);
+                writer.Write(WriteUInt32LB(extentLocation));
+                writer.Write(WriteUInt32LB(dataLength));
+                writer.Seek(7, SeekOrigin.Current); // Date
+                writer.Write(flags);
+                writer.Write(interleavedSize);
+                writer.Write(interleaveGap);
+                writer.Write(WriteUInt16LB(volumeSequenceNumber));
+                writer.Write(nameLength);
+                if (nameLength % 2 == 0) {
+                    writer.Write((byte)0x00); // padding
+                }
+                writer.Write(systemUse);
+                return result;
             }
 
             public class DateEntry {

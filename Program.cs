@@ -47,13 +47,15 @@ namespace ParseLoDGameData {
                 }
             }
             SetupFiles(disc1);
-            
+            disc1.CreateDisk();
+            /*
             dynamic[] itemList = GameData.RipItems(S_ITEM.DecompressedData);
             dynamic[] monsterList = GameData.RipMonsters(S_BTLD.DecompressedData);
   
             for (int i = 0; i < 192; i++) {
                 Console.WriteLine($"{itemList[i].Name} \t {itemList[i].Description}");
             }
+            */
 
             /*
             DiscRead.RecalculateLBA(root, 0x16);
