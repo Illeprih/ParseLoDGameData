@@ -6,15 +6,24 @@ using System.Text;
 
 namespace ParseLoDGameData {
     class DiscHandeler {
-        static readonly byte[] syncPattern = new byte[] { 0x0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0 };
+        static readonly byte[] syncPattern = new byte[] { 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00 };
+        static readonly byte[] pvdHeader = new byte[] { 0x00, 0x00, 0x09, 0x00, 0x00, 0x00, 0x09, 0x00};
+        static readonly byte[] dataHeader = new byte[] { 0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 0x08, 0x00 };
+        static readonly byte[] endHeader = new byte[] { 0x00, 0x00, 0x89, 0x00, 0x00, 0x00, 0x89, 0x00 };
 
 
         public class Disc {
             string path;
             byte[] systemSegment;
-            PrimaryVolumeDescriptorEntry primaryVolumeDescriptor;
-            PathTableEntry pathTable;
-            List<DirectoryEntry> root;
+            dynamic primaryVolumeDescriptor;
+            dynamic pathTable;
+            List<dynamic> root = new List<dynamic>();
+
+            public string Path { get { return path; } }
+            public byte[] SystemSegment { get { return systemSegment; } }
+            public dynamic PrimaryVolumeDescriptor { get { return primaryVolumeDescriptor; } }
+            public dynamic PathTable { get { return pathTable; } }
+            public List<dynamic> Root { get { return root; } }
 
 
             public Disc(string path) {
@@ -27,30 +36,203 @@ namespace ParseLoDGameData {
                 systemSegment = reader.ReadBytes(0x9300);
                 primaryVolumeDescriptor = new PrimaryVolumeDescriptorEntry(reader);
                 pathTable = new PathTableEntry(reader);
+                if (!reader.ReadBytes(12).SequenceEqual(syncPattern)) {
+                    throw new ArgumentException("Synchronization pattern not found. Incorrect file type.");
+                }
+                reader.BaseStream.Seek(12, SeekOrigin.Current);
+                root = Contents(reader);
+            }
+
+            List<dynamic> Contents(BinaryReader reader) {
+                List<dynamic> result = new List<dynamic>();
                 while (reader.ReadByte() != 0) {
                     reader.BaseStream.Seek(-1, SeekOrigin.Current);
-                    root.Add(new DirectoryEntry(reader));
+                    var temp = new DirectoryEntry(reader);
+                    if (temp.Name != Convert.ToChar(0).ToString() && temp.Name != Convert.ToChar(1).ToString()) {
+                        result.Add(temp);
+                    }
                 }
                 reader.BaseStream.Seek(2352 - reader.BaseStream.Position % 2352, SeekOrigin.Current); // seek end of current segment
-                foreach (var children in root) {
+                foreach (var children in result) {
                     if (children.Flags == 2) { // Folder
+                        reader.BaseStream.Seek(children.ExtentLocation * 2352, SeekOrigin.Begin); // get location of the folder
+                        if (!reader.ReadBytes(12).SequenceEqual(syncPattern)) {
+                            throw new ArgumentException("Synchronization pattern not found. Incorrect file type.");
+                        }
+                        reader.BaseStream.Seek(12, SeekOrigin.Current); // Skip address, type and header.
+                        children.Children = Contents(reader);
 
                     } else { // File
+                        if (children.Name == "MIX.DA;1") { // Currently gives header error. Different format??
+                            continue;
+                        }
                         children.GetData(reader);
                     }
                 }
-
+                return result;
             }
         }
 
         public class PrimaryVolumeDescriptorEntry {
+            byte type = 1;
+            string name = "CD001";
+            byte version = 1;
+            string systemName = "PLAYSTATION                     ";
+            string volumeName = "SCUS944491                      ";
+            UInt32 volumeSize = 206187;
+            UInt16 volumeSetSize = 1;
+            UInt16 volumeSequenceNumber = 1;
+            UInt16 logicalBlockSize = 2048;
+            UInt32 pathTableSize = 106;
+            UInt32 pathLLocation = 18;
+            UInt32 optionalPathLLocation = 19;
+            UInt32 pathMLocation = 20;
+            UInt32 optionalPathMLocation = 21;
+            dynamic root = new DirectoryEntry(); // Directory entry for the root directory
+            string volumeSetName = "DISC1                                                                                                                           ";
+            string publisherName = "SONY COMPUTER ENTERTAINMENT INC                                                                                                 ";
+            string dataPreparerName = "SONY COMPUTER ENTERTAINMENT INC                                                                                                 ";
+            string applicationName = "PLAYSTATION                                                                                                                     ";
+            string copyrightName = "SCEI                                  ";
+            string abstractName = "                                    ";
+            string bibliographicName = "                                     ";
+            dynamic volumeCreation = new DateEntry(1999, 10, 28, 0, 0, 0, 0, 0);
+            dynamic volumeModification = new DateEntry(0, 0, 0, 0, 0, 0, 0, 0);
+            dynamic volumeExpiration = new DateEntry(0, 0, 0, 0, 0, 0, 0, 0);
+            dynamic volumeEffective = new DateEntry(0, 0, 0, 0, 0, 0, 0, 0);
+            byte fileStructureVersion = 1;
+            byte[] applicationUsed = new byte[512];
+            byte[] reserved = new byte[653];
+
+            public byte Type { get { return type; } set { type = value; } }
+            public string Name { get { return name; } set { name = value; } }
+            public byte Version { get { return version; } set { version = value; } }
+            public string SystemName { get { return systemName; } set { systemName = value; } }
+            public string VolumeName { get { return volumeName; } set { volumeName = value; } }
+            public UInt32 VolumeSize { get { return volumeSize; } set { volumeSize = value; } }
+            public UInt16 VolumeSetSize { get { return volumeSetSize; } set { volumeSetSize = value; } }
+            public UInt16 VolumeSequenceNumber { get { return volumeSequenceNumber; } set { volumeSequenceNumber = value; } }
+            public UInt16 LogicalBlockSize { get { return logicalBlockSize; } set { logicalBlockSize = value; } }
+            public UInt32 PathTableSize { get { return pathTableSize; } set { pathTableSize = value; } }
+            public UInt32 PathLLocation { get { return pathLLocation; } set { pathLLocation = value; } }
+            public UInt32 OptionalPathLLocation { get { return optionalPathLLocation; } set { optionalPathLLocation = value; } }
+            public UInt32 PathMLocation { get { return pathMLocation; } set { pathMLocation = value; } }
+            public UInt32 OptionalPathMLocatuin { get { return optionalPathMLocation; } set { optionalPathMLocation = value; } }
+            public DirectoryEntry Root { get { return root; } set { root = value; } }
+            public string VolumeSetName { get { return volumeSetName; } set { volumeSetName = value; } }
+            public string PublisherName { get { return publisherName; } set { publisherName = value; } }
+            public string DataPreparerName { get { return dataPreparerName; } set { dataPreparerName = value; } }
+            public string ApplicationName { get { return applicationName; } set { applicationName = value; } }
+            public string CopyrightName { get { return copyrightName; } set { copyrightName = value; } }
+            public string AbstractName { get { return abstractName; } set { abstractName = value; } }
+            public string BibliographicName { get { return bibliographicName; } set { bibliographicName = value; } }
+            public DateEntry VolumeCreation { get { return volumeCreation; } set { volumeCreation = value; } }
+            public DateEntry VolumeModification { get { return volumeModification; } set { volumeModification = value; } }
+            public DateEntry VolumeExpiration { get { return volumeExpiration; } set { volumeExpiration = value; } }
+            public DateEntry VolumeEffective { get { return volumeEffective; } set { volumeEffective = value; } }
+            public byte FileStructureVersion { get { return FileStructureVersion; } set { fileStructureVersion = value; } }
+            public byte[] ApplicationUsed { get { return applicationUsed; } }
+            public byte[] Reserverd { get { return reserved; } }
+
+
 
             public PrimaryVolumeDescriptorEntry() {
 
             }
 
             public PrimaryVolumeDescriptorEntry(BinaryReader reader) {
+                if (!reader.ReadBytes(12).SequenceEqual(syncPattern)) {
+                    throw new ArgumentException("Synchronization pattern not found. Incorrect file type.");
+                }
+                reader.BaseStream.Seek(4, SeekOrigin.Current); //Address + mode
+                if (!reader.ReadBytes(8).SequenceEqual(pvdHeader)) {
+                    throw new ArgumentException("Primary Volume descriptor header not found. Incorrect file type.");
+                }
+                type = reader.ReadByte();
+                name = new string(reader.ReadChars(5));
+                version = reader.ReadByte();
+                reader.BaseStream.Seek(1, SeekOrigin.Current); // Unused
+                systemName = new string(reader.ReadChars(32));
+                volumeName = new string(reader.ReadChars(32));
+                reader.BaseStream.Seek(8, SeekOrigin.Current); // Unused
+                volumeSize = ReadUInt32LB(reader);
+                reader.BaseStream.Seek(32, SeekOrigin.Current); // Unused
+                volumeSetSize = ReadUInt16LB(reader);
+                volumeSequenceNumber = ReadUInt16LB(reader);
+                logicalBlockSize = ReadUInt16LB(reader);
+                pathTableSize = ReadUInt32LB(reader);
+                pathLLocation = reader.ReadUInt32();
+                optionalPathLLocation = reader.ReadUInt32();
+                pathMLocation = BitConverter.ToUInt32(reader.ReadBytes(4).Reverse().ToArray());
+                optionalPathMLocation = BitConverter.ToUInt32(reader.ReadBytes(4).Reverse().ToArray());
+                root = new DirectoryEntry(reader);
+                volumeSetName = new string(reader.ReadChars(128));
+                publisherName = new string(reader.ReadChars(128));
+                dataPreparerName = new string(reader.ReadChars(128));
+                applicationName = new string(reader.ReadChars(128));
+                copyrightName = new string(reader.ReadChars(38));
+                abstractName = new string(reader.ReadChars(36));
+                bibliographicName = new string(reader.ReadChars(37));
+                volumeCreation = new PrimaryVolumeDescriptorEntry.DateEntry(reader);
+                volumeModification = new PrimaryVolumeDescriptorEntry.DateEntry(reader);
+                volumeExpiration = new PrimaryVolumeDescriptorEntry.DateEntry(reader);
+                volumeEffective = new PrimaryVolumeDescriptorEntry.DateEntry(reader);
+                fileStructureVersion = reader.ReadByte();
+                reader.BaseStream.Seek(1, SeekOrigin.Current); // Unused
+                applicationUsed = reader.ReadBytes(512);
+                reserved = reader.ReadBytes(653);
+                reader.BaseStream.Seek(280, SeekOrigin.Current); // Error detection/correction
+                if (!reader.ReadBytes(12).SequenceEqual(syncPattern)) {
+                    throw new ArgumentException("Synchronization pattern not found. Incorrect file type.");
+                }
+                reader.BaseStream.Seek(4, SeekOrigin.Current); //Address + Mode
+                if (!reader.ReadBytes(8).SequenceEqual(endHeader)) {
+                    throw new ArgumentException("Primary Volume Descriptor end header not found. Incorrect file type.");
+                }
+                if (reader.ReadByte() != 0xFF) {
+                    throw new ArgumentException("Incorect Primary Volume Descriptor set terminator.");
+                }
+                if (new string(reader.ReadChars(5)) != name) {
+                    throw new ArgumentException("Primary Volume Descriptor set terminator identifier doesn't match");
+                }
+                reader.BaseStream.Seek(0x912, SeekOrigin.Current); //Move to end of the block
 
+            }
+
+            public class DateEntry {
+                public UInt16 year = 1999;
+                public byte month = 10;
+                public byte day = 28;
+                public byte hour = 0;
+                public byte minute = 0;
+                public byte second = 0;
+                public byte milisecond = 0;
+                public byte gmt = 0;
+
+                public DateEntry() {
+
+                }
+                public DateEntry(int year, int month, int day, int hour, int minute, int second, int milisecond, int gmt) {
+                    this.year = (UInt16)year;
+                    this.month = (byte)month;
+                    this.day = (byte)day;
+                    this.hour = (byte)hour;
+                    this.minute = (byte)minute;
+                    this.second = (byte)second;
+                    this.milisecond = (byte)milisecond;
+                    this.gmt = (byte)gmt;
+                }
+
+                public DateEntry(BinaryReader reader) {
+                    year = Convert.ToUInt16(new string(reader.ReadChars(4)));
+                    month = Convert.ToByte(new string(reader.ReadChars(2)));
+                    day = Convert.ToByte(new string(reader.ReadChars(2)));
+                    hour = Convert.ToByte(new string(reader.ReadChars(2)));
+                    minute = Convert.ToByte(new string(reader.ReadChars(2)));
+                    second = Convert.ToByte(new string(reader.ReadChars(2)));
+                    milisecond = Convert.ToByte(new string(reader.ReadChars(2)));
+                    gmt = reader.ReadByte();
+                }
             }
         }
 
@@ -61,7 +243,7 @@ namespace ParseLoDGameData {
             }
 
             public PathTableEntry(BinaryReader reader) {
-
+                reader.BaseStream.Seek(4 * 2352, SeekOrigin.Current);
             }
         }
 
@@ -109,7 +291,7 @@ namespace ParseLoDGameData {
                 extendedAttributeRecordLength = reader.ReadByte();
                 extentLocation = ReadUInt32LB(reader);
                 dataLength = ReadUInt32LB(reader);
-                date = new DateEntry(reader);
+                date = new DirectoryEntry.DateEntry(reader);
                 flags = reader.ReadByte();
                 interleavedSize = reader.ReadByte();
                 interleaveGap = reader.ReadByte();
