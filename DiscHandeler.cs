@@ -9,9 +9,10 @@ using System.Text;
 namespace ParseLoDGameData {
     class DiscHandeler {
         static readonly byte[] syncPattern = new byte[] { 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00 };
-        static readonly byte[] pvdHeader = new byte[] { 0x00, 0x00, 0x09, 0x00, 0x00, 0x00, 0x09, 0x00};
+        static readonly byte[] pvdHeader = new byte[] { 0x00, 0x00, 0x09, 0x00, 0x00, 0x00, 0x09, 0x00 };
         static readonly byte[] dataHeader = new byte[] { 0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 0x08, 0x00 };
         static readonly byte[] endHeader = new byte[] { 0x00, 0x00, 0x89, 0x00, 0x00, 0x00, 0x89, 0x00 };
+        static readonly byte[] directoryEnd = new byte[] {0x00, 0x00, 0x00, 0x00, 0x8D, 0x55, 0x58, 0x41, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 
 
         public class Disc {
@@ -45,6 +46,7 @@ namespace ParseLoDGameData {
                 root = Contents(reader);
             }
 
+
             List<dynamic> Contents(BinaryReader reader) {
                 List<dynamic> result = new List<dynamic>();
                 while (reader.ReadByte() != 0) {
@@ -54,7 +56,6 @@ namespace ParseLoDGameData {
                         result.Add(temp);
                     }
                 }
-                result = result.OrderBy(o => o.ExtentLocation).ToList();
                 reader.BaseStream.Seek(2352 - reader.BaseStream.Position % 2352, SeekOrigin.Current); // seek end of current segment
                 foreach (var children in result) {
                     if (children.Flags == 2) { // Folder
@@ -79,7 +80,134 @@ namespace ParseLoDGameData {
                 using (BinaryWriter writer = new BinaryWriter(File.Open("LOD.BIN", FileMode.Create))) {
                     writer.Write(systemSegment);
                     writer.Write(primaryVolumeDescriptor.CreatePVD());
+                    writer.Write(CreatePathTables());
+                    WriteData(writer, root, primaryVolumeDescriptor.Root.ExtentLocation, primaryVolumeDescriptor.Root.ExtentLocation);
                 }
+            }
+
+            public void WriteData(BinaryWriter writer, List<dynamic> folder, UInt32 currentIndex, UInt32 parentIndex) {
+                var orderedFolder = folder.OrderBy(o => o.ExtentLocation).ToList();
+                // write . and ..
+                writer.Write(syncPattern);
+                writer.Seek(3, SeekOrigin.Current); // Address 2
+                writer.Write((byte)2); // mode
+                writer.Write(endHeader);
+                writer.Write((UInt16)0x30);
+                writer.Write(WriteUInt32LB(currentIndex));
+                writer.Write(WriteUInt32LB(2048));
+                writer.Seek(7, SeekOrigin.Current); // Date
+                writer.Write((byte)2);
+                writer.Seek(2, SeekOrigin.Current);
+                writer.Write(WriteUInt16LB(1));
+                writer.Write((byte)1);
+                writer.Write(Encoding.ASCII.GetBytes(Convert.ToChar(0).ToString()));
+                writer.Write(directoryEnd);
+
+                writer.Write((UInt16)0x30);
+                writer.Write(WriteUInt32LB(parentIndex));
+                writer.Write(WriteUInt32LB(2048));
+                writer.Seek(7, SeekOrigin.Current); // Date
+                writer.Write((byte)2);
+                writer.Seek(2, SeekOrigin.Current);
+                writer.Write(WriteUInt16LB(1));
+                writer.Write((byte)1);
+                writer.Write(Encoding.ASCII.GetBytes(Convert.ToChar(1).ToString()));
+                writer.Write(directoryEnd);
+
+
+                foreach (dynamic children in folder) {
+                    writer.Write(children.CreateDirectoryEntry());
+                }
+                writer.Seek((int)(2352 - writer.BaseStream.Position % 2352), SeekOrigin.Current);   // seek end of current segment
+                foreach (dynamic children in orderedFolder) {
+                    if (children.Flags == 2) {
+                        continue;
+                    }
+                    writer.Write(children.CreateDataEntry());
+                }
+                foreach (dynamic children in orderedFolder) {
+                    if (children.Flags == 0) {
+                        continue;
+                    }
+                    WriteData(writer, children.Children, children.ExtentLocation, currentIndex);
+                }
+            }
+
+            public byte[] CreatePathTables() {
+                byte[] result = new byte[9408];
+                BinaryWriter writer = new BinaryWriter(new MemoryStream(result));
+                byte[] little = CreatePathTable(root, true);
+                byte[] big = CreatePathTable(root, false);
+                writer.Write(syncPattern);
+                writer.Seek(3, SeekOrigin.Current); // Address ??
+                writer.Write((byte)0x02);
+                writer.Write(endHeader);
+                writer.Write(little);
+                writer.Write(syncPattern);
+                writer.Seek(3, SeekOrigin.Current); // Address ??
+                writer.Write((byte)0x02);
+                writer.Write(endHeader);
+                writer.Write(little);
+                writer.Write(syncPattern);
+                writer.Seek(3, SeekOrigin.Current); // Address ??
+                writer.Write((byte)0x02);
+                writer.Write(endHeader);
+                writer.Write(big);
+                writer.Write(syncPattern);
+                writer.Seek(3, SeekOrigin.Current); // Address ??
+                writer.Write((byte)0x02);
+                writer.Write(endHeader);
+                writer.Write(big);
+                return result;
+            }
+
+            public byte[] CreatePathTable(List<dynamic> folder, bool littleEndian) {
+                byte[] result = new byte[2328];
+                BinaryWriter writer = new BinaryWriter(new MemoryStream(result));
+                writer.Write((byte)1);
+                writer.Write((byte)0);
+                UInt32 pvdIndex = primaryVolumeDescriptor.Root.ExtentLocation;
+                if (littleEndian) {
+                    writer.Write(pvdIndex);
+                    writer.Write((UInt16)0x01);
+                } else {
+                    writer.Write(BitConverter.GetBytes(pvdIndex).Reverse().ToArray());
+                    writer.Write((byte)0);
+                    writer.Write((byte)1);
+                }
+                writer.Seek(2, SeekOrigin.Current);
+                foreach (dynamic dir in folder) {
+                    if (dir.Flags == 0) {
+                        continue;
+                    }
+                    if (littleEndian) {
+                        writer.Write(dir.CreateLittlePathEntry(1));
+                    } else {
+                        writer.Write(dir.CreateBigPathEntry(1));
+                    }
+                    
+                }
+                foreach (dynamic dir in folder) {
+                    if (dir.Flags == 0) {
+                        continue;
+                    }
+                    foreach (dynamic subdir in dir.Children) {
+                        if (subdir.Flags == 0) {
+                            continue;
+                        }
+                        UInt16 index = (UInt16)(folder.IndexOf(folder.Where(p => p.Name == dir.Name).FirstOrDefault()) + 2);
+                        if (littleEndian) {
+                            writer.Write(subdir.CreateLittlePathEntry(index));
+                        } else {
+                            writer.Write(subdir.CreateBigPathEntry(index));
+                        }
+                    }
+                    
+
+                }
+
+
+                return result;
             }
         }
 
@@ -318,6 +446,8 @@ namespace ParseLoDGameData {
             public PathTableEntry(BinaryReader reader) {
                 reader.BaseStream.Seek(4 * 2352, SeekOrigin.Current);
             }
+
+
         }
 
         public class DirectoryEntry {
@@ -397,11 +527,58 @@ namespace ParseLoDGameData {
                 writer.Write(interleaveGap);
                 writer.Write(WriteUInt16LB(volumeSequenceNumber));
                 writer.Write(nameLength);
+                writer.Write(Encoding.ASCII.GetBytes(name));
                 if (nameLength % 2 == 0) {
                     writer.Write((byte)0x00); // padding
                 }
                 writer.Write(systemUse);
                 return result;
+            }
+
+            public byte[] CreateDataEntry() {
+                int len = (int)Math.Ceiling(((double)dataLength / 2048));
+                byte[] result = new byte[len * 2352];
+                BinaryWriter writer = new BinaryWriter(new MemoryStream(result));
+                BinaryReader reader = new BinaryReader(new MemoryStream(data));
+                for (int i = 0; i < len; i++) {
+                    writer.Write(syncPattern);
+                    writer.Seek(3, SeekOrigin.Current);
+                    writer.Write((byte)0x02);
+                    if (i - 1 == len) {
+                        writer.Write(endHeader);
+                    } else {
+                        writer.Write(dataHeader);
+                    }
+                    writer.Write(reader.ReadBytes(2048));
+                    writer.Seek(280, SeekOrigin.Current);
+                }
+
+                return result;
+            }
+
+            public byte[] CreateLittlePathEntry(UInt16 parentIndex) {
+                byte[] str = Encoding.ASCII.GetBytes(name);
+                byte[] result = new byte[(int)(Math.Round((double)(8 + str.Length) / 2, MidpointRounding.AwayFromZero) * 2)];
+                BinaryWriter writer = new BinaryWriter(new MemoryStream(result));
+                writer.Write(nameLength);
+                writer.Write(extendedAttributeRecordLength);
+                writer.Write(extentLocation);
+                writer.Write(parentIndex);
+                writer.Write(str);
+                return result;
+            }
+
+            public byte[] CreateBigPathEntry(UInt16 parentIndex) {
+                byte[] str = Encoding.ASCII.GetBytes(name);
+                byte[] result = new byte[(int)(Math.Round((double)(8 + str.Length) / 2, MidpointRounding.AwayFromZero) * 2)];
+                BinaryWriter writer = new BinaryWriter(new MemoryStream(result));
+                writer.Write(nameLength);
+                writer.Write(extendedAttributeRecordLength);
+                writer.Write(BitConverter.GetBytes(extentLocation).Reverse().ToArray());
+                writer.Write(BitConverter.GetBytes(parentIndex).Reverse().ToArray());
+                writer.Write(str);
+                return result;
+
             }
 
             public class DateEntry {
