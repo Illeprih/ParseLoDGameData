@@ -18,9 +18,9 @@ namespace ParseLoDGameData {
         static dynamic TEMP = new System.Dynamic.ExpandoObject();
         static dynamic TTLE = new System.Dynamic.ExpandoObject();
         static dynamic WMAP = new System.Dynamic.ExpandoObject();
-        static dynamic DRAGN0 = new System.Dynamic.ExpandoObject();
-        static dynamic DRAGN1 = new System.Dynamic.ExpandoObject();
-        static dynamic DRAGN21 = new System.Dynamic.ExpandoObject();
+        static dynamic DRGN0 = new System.Dynamic.ExpandoObject();
+        static dynamic DRGN1 = new System.Dynamic.ExpandoObject();
+        static dynamic DRGN21 = new System.Dynamic.ExpandoObject();
         static dynamic MES = new System.Dynamic.ExpandoObject();
         static dynamic DEMO2 = new System.Dynamic.ExpandoObject();
         static dynamic DEMOH = new System.Dynamic.ExpandoObject();
@@ -46,12 +46,8 @@ namespace ParseLoDGameData {
                     }
                 }
             }
-            SetupFiles(disc1);  
-            using (BinaryWriter writer = new BinaryWriter(File.Open("LOD.BIN", FileMode.Create))) {
-                writer.Write(LODXA03.Data);
-            }
-            
-            //disc1.CreateDisk();
+            SetupFiles(disc1);
+            disc1.CreateDisk();
 
             /*
             dynamic[] itemList = GameData.RipItems(S_ITEM.DecompressedData);
@@ -87,9 +83,9 @@ namespace ParseLoDGameData {
             WMAP = OVs.Find(file => file.Name == "WMAP.OV_;1");
 
             List<dynamic> SECT = root.Find(dir => dir.Name == "SECT").Children;
-            DRAGN0 = SECT.Find(file => file.Name == "DRGN0.BIN;1");
-            DRAGN1 = SECT.Find(file => file.Name == "DRGN1.BIN;1");
-            DRAGN21 = SECT.Find(file => file.Name == "DRGN21.BIN;1");
+            DRGN0 = SECT.Find(file => file.Name == "DRGN0.BIN;1");
+            DRGN1 = SECT.Find(file => file.Name == "DRGN1.BIN;1");
+            DRGN21 = SECT.Find(file => file.Name == "DRGN21.BIN;1");
 
             MES = root.Find(dir => dir.Name == "SIM").Children;
 

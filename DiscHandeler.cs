@@ -21,12 +21,14 @@ namespace ParseLoDGameData {
             dynamic primaryVolumeDescriptor;
             dynamic pathTable;
             List<dynamic> root = new List<dynamic>();
+            List<dynamic> completelist = new List<dynamic>();
 
             public string Path { get { return path; } }
             public byte[] SystemSegment { get { return systemSegment; } }
             public dynamic PrimaryVolumeDescriptor { get { return primaryVolumeDescriptor; } }
             public dynamic PathTable { get { return pathTable; } }
             public List<dynamic> Root { get { return root; } }
+            public List<dynamic> CompleteList { get { return completelist; } }
 
 
             public Disc(string path) {
@@ -54,9 +56,11 @@ namespace ParseLoDGameData {
                     var temp = new DirectoryEntry(reader);
                     if (temp.Name != Convert.ToChar(0).ToString() && temp.Name != Convert.ToChar(1).ToString()) {
                         result.Add(temp);
+                        completelist.Add(temp);
                     }
                 }
                 reader.BaseStream.Seek(2352 - reader.BaseStream.Position % 2352, SeekOrigin.Current); // seek end of current segment
+                //result = result.OrderBy(o => o.ExtentLocation).ToList(); Currently doesn't work with path table shuffeled.
                 foreach (var children in result) {
                     if (children.Flags == 2) { // Folder
                         reader.BaseStream.Seek(children.ExtentLocation * 2352, SeekOrigin.Begin); // get location of the folder
@@ -77,6 +81,7 @@ namespace ParseLoDGameData {
             }
 
             public void CreateDisk() {
+                //RecalculateLBA(); This is somehow broken
                 using (BinaryWriter writer = new BinaryWriter(File.Open("LOD.BIN", FileMode.Create))) {
                     writer.Write(systemSegment);
                     writer.Write(primaryVolumeDescriptor.CreatePVD());
@@ -134,6 +139,20 @@ namespace ParseLoDGameData {
                     WriteData(writer, children.Children, children.ExtentLocation, currentIndex);
                 }
             }
+
+            public void RecalculateLBA() {
+                uint i = 23;
+                foreach (var entry in completelist.OrderBy(o => o.ExtentLocation).ToList()) {
+
+                    entry.ExtentLocation = i;
+                    if (entry.Flags == 2) {
+                        i++;
+                    } else {
+                        i += (uint)Math.Ceiling((double)entry.DataLength / 2048);
+                    }
+                }
+            }
+
 
             public byte[] CreatePathTables() {
                 byte[] result = new byte[9408];
@@ -503,6 +522,12 @@ namespace ParseLoDGameData {
                 volumeSequenceNumber = ReadUInt16LB(reader);
                 nameLength = reader.ReadByte();
                 name = new string(reader.ReadChars(nameLength));
+               
+                if (name == "LODXA03.XA;1" && extentLocation == 0) {
+                    extentLocation = 206037;
+                    dataLength = 0x4b000;
+                }
+                
                 if (nameLength % 2 == 0) {
                     reader.ReadByte(); // padding
                 }
@@ -630,7 +655,7 @@ namespace ParseLoDGameData {
 
                 for (int i = 0; i < Math.Ceiling((double)dataLength / 2048); i++) { // get number of segments
                     if (!reader.ReadBytes(12).SequenceEqual(syncPattern)) {
-                        throw new ArgumentException($"Synchronization pattern not found. Incorrect file type. {name}");
+                        throw new ArgumentException($"Synchronization pattern not found. Incorrect file type. {name} Segment: {i}");
                     }
                     reader.ReadBytes(12);
                     for (int j = 0; j < 2048; j++) { // read up to 2048 bytes of each segment
