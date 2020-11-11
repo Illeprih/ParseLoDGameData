@@ -46,8 +46,13 @@ namespace ParseLoDGameData {
                     }
                 }
             }
-            SetupFiles(disc1);
-            disc1.CreateDisk();
+            SetupFiles(disc1);  
+            using (BinaryWriter writer = new BinaryWriter(File.Open("LOD.BIN", FileMode.Create))) {
+                writer.Write(LODXA03.Data);
+            }
+            
+            //disc1.CreateDisk();
+
             /*
             dynamic[] itemList = GameData.RipItems(S_ITEM.DecompressedData);
             dynamic[] monsterList = GameData.RipMonsters(S_BTLD.DecompressedData);
@@ -56,20 +61,11 @@ namespace ParseLoDGameData {
                 Console.WriteLine($"{itemList[i].Name} \t {itemList[i].Description}");
             }
             */
-
-            /*
-            DiscRead.RecalculateLBA(root, 0x16);
-            using (BinaryWriter writer = new BinaryWriter(File.Open("LOD.BIN", FileMode.Create))) {
-                writer.Write(DiscRead.systemSegment);
-                DiscRead.Create(writer, root, 0x16, 0x16);
-            }
-            */
-            //BinaryWriter writer = new BinaryWriter(new MemoryStream(res));
-            //DiscRead.Create(writer, root, 0x16, 0x16);
         }
 
         static void SetupFiles(dynamic disc) {
             List<dynamic> root = disc.Root;
+           
             try {
                 MIX = root.Find(dir => dir.Name == "DA").Children[0];
             } catch (RuntimeBinderException) {
@@ -106,11 +102,11 @@ namespace ParseLoDGameData {
             NEWROOT = root.Find(dir => dir.Name == "SUBMAP").Children;
 
             List<dynamic> XA = root.Find(dir => dir.Name == "XA").Children;
-            LODXA00 = STR.Find(file => file.Name == "LODXA00.XA;1");
-            LODXA01 = STR.Find(file => file.Name == "LODXA01.XA;1");
-            LODXA02 = STR.Find(file => file.Name == "LODXA02.XA;1");
+            LODXA00 = XA.Find(file => file.Name == "LODXA00.XA;1");
+            LODXA01 = XA.Find(file => file.Name == "LODXA01.XA;1");
+            LODXA02 = XA.Find(file => file.Name == "LODXA02.XA;1");
             try {
-                LODXA03 = STR.Find(file => file.Name == "LODXA03.XA;1");
+                LODXA03 = XA.Find(file => file.Name == "LODXA03.XA;1");
             } catch (RuntimeBinderException) {
                 Console.WriteLine("JP version");
             }

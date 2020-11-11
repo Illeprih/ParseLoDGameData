@@ -86,7 +86,6 @@ namespace ParseLoDGameData {
             }
 
             public void WriteData(BinaryWriter writer, List<dynamic> folder, UInt32 currentIndex, UInt32 parentIndex) {
-                var orderedFolder = folder.OrderBy(o => o.ExtentLocation).ToList();
                 // write . and ..
                 writer.Write(syncPattern);
                 writer.Seek(3, SeekOrigin.Current); // Address 2
@@ -114,8 +113,9 @@ namespace ParseLoDGameData {
                 writer.Write(Encoding.ASCII.GetBytes(Convert.ToChar(1).ToString()));
                 writer.Write(directoryEnd);
 
-
-                foreach (dynamic children in folder) {
+                var orderedFolder = folder.OrderBy(o => o.ExtentLocation).ToList();
+                Console.WriteLine("Writing file list");
+                foreach (dynamic children in folder) { // Write file/directory entry for each file/directory
                     writer.Write(children.CreateDirectoryEntry());
                 }
                 writer.Seek((int)(2352 - writer.BaseStream.Position % 2352), SeekOrigin.Current);   // seek end of current segment
@@ -124,11 +124,13 @@ namespace ParseLoDGameData {
                         continue;
                     }
                     writer.Write(children.CreateDataEntry());
+                    Console.WriteLine($"Writing Data {children.Name}");
                 }
                 foreach (dynamic children in orderedFolder) {
                     if (children.Flags == 0) {
                         continue;
                     }
+                    Console.WriteLine($"Moving to {children.Name}");
                     WriteData(writer, children.Children, children.ExtentLocation, currentIndex);
                 }
             }
