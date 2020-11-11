@@ -47,6 +47,7 @@ namespace ParseLoDGameData {
                 }
             }
             SetupFiles(disc1);
+            //DRGN21.DataLength += 2048; Test. Breaks battle end screen
             disc1.CreateDisk();
 
             /*

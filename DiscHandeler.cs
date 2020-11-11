@@ -81,7 +81,7 @@ namespace ParseLoDGameData {
             }
 
             public void CreateDisk() {
-                //RecalculateLBA(); This is somehow broken
+                RecalculateLBA(); //This is somehow broken
                 using (BinaryWriter writer = new BinaryWriter(File.Open("LOD.BIN", FileMode.Create))) {
                     writer.Write(systemSegment);
                     writer.Write(primaryVolumeDescriptor.CreatePVD());
@@ -571,7 +571,7 @@ namespace ParseLoDGameData {
                     writer.Write(syncPattern);
                     writer.Seek(3, SeekOrigin.Current);
                     writer.Write((byte)0x02);
-                    if (i - 1 == len) {
+                    if (i == len - 1) {
                         writer.Write(endHeader);
                     } else {
                         writer.Write(dataHeader);
