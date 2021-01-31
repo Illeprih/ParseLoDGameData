@@ -523,10 +523,6 @@ namespace ParseLoDGameData {
                 nameLength = reader.ReadByte();
                 name = new string(reader.ReadChars(nameLength));
                
-                if (name == "LODXA03.XA;1" && extentLocation == 0) {
-                    extentLocation = 206037;
-                    dataLength = 0x4b000;
-                }
                 
                 if (nameLength % 2 == 0) {
                     reader.ReadByte(); // padding
