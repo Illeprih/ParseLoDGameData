@@ -4,6 +4,9 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace ParseLoDGameData {
     class DiscHandeler2 {
@@ -13,6 +16,7 @@ namespace ParseLoDGameData {
 
         static int LBA = 0x16;
         static dynamic brokenFile = new System.Dynamic.ExpandoObject();
+
 
         public static void UnpackDisc(string path, string unpackLocation) {
             using (BinaryReader reader = new BinaryReader(File.Open(path, FileMode.Open))) {
@@ -34,7 +38,6 @@ namespace ParseLoDGameData {
                 }
                 reader.BaseStream.Seek(80, SeekOrigin.Current);
                 int discSize = reader.ReadInt32();
-                Console.WriteLine(discSize);
                 reader.BaseStream.Seek(-108, SeekOrigin.Current);
 
                 using (BinaryWriter writer = new BinaryWriter(File.Open(unpackLocation + "PrimaryVolumeDescriptor.bin", FileMode.Create))) {
@@ -51,10 +54,14 @@ namespace ParseLoDGameData {
                 brokenFile.ExtentLocation = (uint)(LBA + 1);
                 brokenFile.DataLength = (uint)(150 * 2048); // doesn't seem like the right solution
 
-                Console.WriteLine(brokenFile.ExtentLocation);
-                Console.WriteLine(brokenFile.DataLength);
-
+                /*
+                var t1 = new Task(() => {
+                    ExtractFiles(reader, files, unpackLocation);
+                });
+                t1.Start();
+                */
                 ExtractFiles(reader, files, unpackLocation);
+                
             }
         }
 
@@ -66,27 +73,9 @@ namespace ParseLoDGameData {
 
                 } else {
                     reader.BaseStream.Seek(entry.ExtentLocation * 2352, SeekOrigin.Begin);
-                    byte[] data = new byte[entry.DataLength];
-                    for (int i = 0; i < Math.Ceiling((double)entry.DataLength / 2048); i++) { // get number of segments
-                        if (!reader.ReadBytes(12).SequenceEqual(syncPattern)) {
-                            throw new ArgumentException($"Synchronization pattern not found. Incorrect file type. {entry.Name} Segment: {i}");
-                        }
-                        reader.ReadBytes(12);
-                        for (int j = 0; j < 2048; j++) { // read up to 2048 bytes of each segment
-                            if (j + i * 2048 > entry.DataLength - 1) {
-                                break;
-                            } else {
-                                data[j + i * 2048] = reader.ReadByte();
-                            }
-                        }
-                        reader.ReadBytes(4); // error detection
-                        reader.ReadBytes(276); // error correction
-                    }
-                    if (entry.Name.Contains(".OV_")) {
-                        data = BPE.Decompress(data);
-                    }
+                    UnpackPS1Data.UnpackData(entry, reader.ReadBytes((int)(Math.Ceiling((double)entry.DataLength / 2048) * 2352)));
                     using (BinaryWriter writer = new BinaryWriter(File.Open(unpackPath + entry.Name.Remove(entry.Name.Length - 2), FileMode.Create))) {
-                        writer.Write(data);
+                        writer.Write(entry.Data);
                     }
                 }
             }
@@ -149,6 +138,7 @@ namespace ParseLoDGameData {
             byte[] systemUse = new byte[14];
             List<dynamic> children = new List<dynamic>();
             byte[] data;
+            List<byte[]> headerList = new List<byte[]>();
 
             public byte RecordLength { get { return recordLength; } }
             public byte ExtendedAttributeRecordLength { get { return extendedAttributeRecordLength; } }
@@ -162,6 +152,7 @@ namespace ParseLoDGameData {
             public byte[] SystemUse { get { return systemUse; } }
             public List<dynamic> Children { get { return children; } set { children = value; } }
             public byte[] Data { get { return data; } set { data = value; } }
+            public List<byte[]> HeaderList { get { return headerList; } set { headerList = value; } }
 
 
             public Directory(BinaryReader reader) {
