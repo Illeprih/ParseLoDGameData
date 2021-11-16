@@ -4,7 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 
-namespace ParseLoDGameData {
+namespace LodmodsDM {
 
     public class UnpackPS1Data {
 

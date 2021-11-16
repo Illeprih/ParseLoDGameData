@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography.X509Certificates;
 
-namespace ParseLoDGameData {
+namespace LodmodsDM {
     class GameData {
         static int item_desc_ptr_addr = 0x1C298;
         static int item_desc_addr = 0x18DFC;

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 
-namespace ParseLoDGameData {
+namespace LodmodsDM {
     class BPE {
         public static byte[] Decompress(byte[] file) {
             BinaryReader compressedFile = new BinaryReader(new MemoryStream(file));

@@ -5,7 +5,7 @@ using System.Collections;
 using System.IO;
 using System.Linq;
 
-namespace ParseLoDGameData {
+namespace LodmodsDM {
     class Program {
         static dynamic MIX = new System.Dynamic.ExpandoObject();
         static dynamic DABAS = new System.Dynamic.ExpandoObject();
@@ -34,10 +34,10 @@ namespace ParseLoDGameData {
         static dynamic LODXA03 = new System.Dynamic.ExpandoObject();
 
         static void Main(string[] args) {
-            string fileName = "D:/Program Files (x86)/ePSXe/Hry/The Legend of Dragoon/The Legend of Dragoon - Disc 1.bin";
+            //string fileName = "D:/Program Files (x86)/ePSXe/Hry/The Legend of Dragoon/The Legend of Dragoon - Disc 1.bin";
             //string fileName = "G:/Projekty/LoD Versions/JP/(PSX) The Legend Of Dragoon (CD1) (SCPS-10119).bin";
-            var unpackPath = Directory.GetCurrentDirectory() + "/Unpacked/";
-            DiscHandeler2.UnpackDisc(fileName, unpackPath);
+            //var unpackPath = Directory.GetCurrentDirectory() + "/Unpacked/";
+            //DiscHandler2.UnpackDisc(fileName, unpackPath);
 
 
             //string fileName = "G:/Projekty/LoD Versions/JP/(PSX) The Legend Of Dragoon (CD1) (SCPS-10119).bin";
