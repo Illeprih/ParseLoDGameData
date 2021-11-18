@@ -1,0 +1,16 @@
+﻿<Window x:Name="LodmodsDM" x:Class="LodmodsGUI.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:LodmodsGUI"
+        mc:Ignorable="d"
+        Title="LODModS DM" Height="450" Width="800">
+    <DockPanel>
+        <Menu DockPanel.Dock="Top"  Background="#FFB2B2B2" FontSize="14" Height="20" VerticalAlignment="Top">
+            <MenuItem x:Name="_File" Header="_File" Height="20">
+                <MenuItem x:Name="_New_Configuration_File" Header="New Configuration File" FontSize="14" Click="OpenRegionSelectionWindow"/>
+            </MenuItem>
+        </Menu>
+    </DockPanel>
+</Window>
