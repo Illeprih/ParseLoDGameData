@@ -46,9 +46,9 @@ namespace LodmodsDM
     public class DiscFileConfig
     {
         [YamlIgnore]
-        public string Region { get; private set; }
+        public string Region { get; set; }
         [YamlIgnore]
-        public string DiscName { get; private set; }
+        public string DiscName { get; set; }
         public string DiscFileName { get; set; }
 
         public Dictionary<string, bool> DiscFileDict { get; private set; } = new Dictionary<string, bool>();
@@ -266,6 +266,15 @@ namespace LodmodsDM
             using StreamReader reader = new StreamReader(configFileName);
             string fileContent = reader.ReadToEnd();
             MainConfig mainConfig = deserializer.Deserialize<MainConfig>(fileContent);
+
+            foreach (string region in mainConfig.Regions.Keys)
+            {
+                foreach (string discName in mainConfig.Regions[region].GameDiscs.Keys)
+                {
+                    mainConfig.Regions[region].GameDiscs[discName].Region = region;
+                    mainConfig.Regions[region].GameDiscs[discName].DiscName = discName;
+                }
+            }
 
             return mainConfig;
         }
