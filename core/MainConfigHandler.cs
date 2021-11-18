@@ -267,12 +267,12 @@ namespace LodmodsDM
             string fileContent = reader.ReadToEnd();
             MainConfig mainConfig = deserializer.Deserialize<MainConfig>(fileContent);
 
-            foreach (string region in mainConfig.Regions.Keys)
+            foreach (KeyValuePair<string, GameRegionConfig> region in mainConfig.Regions)
             {
-                foreach (string discName in mainConfig.Regions[region].GameDiscs.Keys)
+                foreach (KeyValuePair<string, DiscFileConfig> disc in region.Value.GameDiscs)
                 {
-                    mainConfig.Regions[region].GameDiscs[discName].Region = region;
-                    mainConfig.Regions[region].GameDiscs[discName].DiscName = discName;
+                    disc.Value.Region = region.Key;
+                    disc.Value.DiscName = disc.Key;
                 }
             }
 
