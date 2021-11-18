@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using static LodmodsDM.Globals;
+using YamlDotNet.Serialization;
 
 namespace LodmodsDM
 {
@@ -16,7 +18,7 @@ namespace LodmodsDM
         public string PatchesDir { get; set; }
         public string ModsDir { get; set; }
 
-        // Form should accept empty values in fields, since, for instance,
+        // Form should accept empty values in fields, since for instance,
         // players won't need a patches directory
 
         // For modders
@@ -41,7 +43,9 @@ namespace LodmodsDM
 
     public class DiscFileConfig
     {
+        [YamlIgnore]
         public string Region { get; }
+        [YamlIgnore]
         public string DiscName { get; }
         public string DiscFileName { get; set; }
 
@@ -50,6 +54,7 @@ namespace LodmodsDM
         public DiscFileConfig(string region, string discName)
         {
             Region = region;
+            DiscName = discName;
 
             switch (discName)
             {
@@ -183,15 +188,12 @@ namespace LodmodsDM
 
     public class GameRegionConfig
     {
-        //public Dictionary<string, string[]> RegionCodes => _regionCodes;
-        //public string Region { get; private set; }
         public string DiscDir { get; set; }
         public List<string> AssetListFiles { get; }
         public Dictionary<string, DiscFileConfig> GameDiscs { get; private set; }
 
         public GameRegionConfig(string region)
         {
-            //Region = region;
             GameDiscs = new Dictionary<string, DiscFileConfig>();
             string[] discNameList = new string[] { "All Discs", "Disc 1", "Disc 2", "Disc 3", "Disc 4" };
 
@@ -210,24 +212,16 @@ namespace LodmodsDM
     // Config form should have option for either Player or Modder config creation
     // Player config would exclude certain folders, be in main directory
     // Modder config would create a new subfolder with mod title and its own config file
-    class MainConfig
+    public class MainConfig
     {
         public string ConfigName { get; set; }
         public string ConfigType { get; set; }
         public ModdingDirConfig ModdingDirs { get; private set; }
         public Dictionary<string, GameRegionConfig> Regions { get; }
 
-        public void AddRegion(string region)
-        {
-            GameRegionConfig regionConfig = new GameRegionConfig(region);
-            Regions.Add(region, regionConfig);
-        }
-
-        public void RemoveRegion(string region) { Regions.Remove(region); }
-
         public MainConfig(string configName, string configType, List<string> regions)
         {
-            ConfigName = $"{configName}.config";
+            ConfigName = $"{configName}.yaml";
             ConfigType = configType;
             
             if (configType == "Modder")
@@ -243,10 +237,28 @@ namespace LodmodsDM
                 throw new ArgumentException("Config type must be 'Modding' or 'Player'");
             }
 
+            Regions = new Dictionary<string, GameRegionConfig>();
             foreach (string region in regions)
             {
                 this.AddRegion(region);
             }
+        }
+
+        public void AddRegion(string region)
+        {
+            GameRegionConfig regionConfig = new GameRegionConfig(region);
+            Regions.Add(region, regionConfig);
+        }
+
+        public void RemoveRegion(string region) { Regions.Remove(region); }
+
+
+        public void WriteMainConfig()
+        {
+            var serializer = new Serializer();
+            string fileContent = serializer.Serialize(this);
+            using StreamWriter writer = new StreamWriter(ConfigName);
+            writer.Write(fileContent);
         }
     }
 }
