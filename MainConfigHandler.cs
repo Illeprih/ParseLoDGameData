@@ -152,8 +152,7 @@ namespace LodmodsDM
 
         public bool GetFileValue(string key)
         {
-            bool value;
-            DiscFileDict.TryGetValue(key, out value);
+            DiscFileDict.TryGetValue(key, out bool value);
             return value;
         }
 
@@ -162,11 +161,15 @@ namespace LodmodsDM
             key = key.ToUpper();
             string[] jpCodes = new string[] { "JP1", "JP2" };
 
-            if (!Array.Exists(COMPLETE_FILE_LIST, k => k == key)) {
+            if (!Array.Exists(COMPLETE_FILE_LIST, k => k == key)) 
+            {
                 throw new ArgumentException($"{key} is not a valid file name.");
             } else if (key == "XA/LODXA03.XA")
             {
-                if (!Array.Exists(jpCodes, r => r == Region)) { DiscFileDict[key] = value; }
+                if (!Array.Exists(jpCodes, r => r == Region)) 
+                { 
+                    DiscFileDict[key] = value; 
+                }
             } else if (key == "DA/MIX.DA")
             {
                 if (Array.Exists(new string[] { "JP1", "JP2" }, r => r == Region)
