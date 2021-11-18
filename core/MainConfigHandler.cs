@@ -21,6 +21,8 @@ namespace LodmodsDM
         // Form should accept empty values in fields, since for instance,
         // players won't need a patches directory
 
+        public ModdingDirConfig() { }
+
         // For modders
         public ModdingDirConfig(string extractedFilesDir, string gameTextDir,
             string patchesDir)
@@ -44,12 +46,14 @@ namespace LodmodsDM
     public class DiscFileConfig
     {
         [YamlIgnore]
-        public string Region { get; }
+        public string Region { get; private set; }
         [YamlIgnore]
-        public string DiscName { get; }
+        public string DiscName { get; private set; }
         public string DiscFileName { get; set; }
 
         public Dictionary<string, bool> DiscFileDict { get; private set; } = new Dictionary<string, bool>();
+
+        public DiscFileConfig() { }
 
         public DiscFileConfig(string region, string discName)
         {
@@ -189,8 +193,10 @@ namespace LodmodsDM
     public class GameRegionConfig
     {
         public string DiscDir { get; set; }
-        public List<string> AssetListFiles { get; }
+        public List<string> AssetListFiles { get; private set; }
         public Dictionary<string, DiscFileConfig> GameDiscs { get; private set; }
+
+        public GameRegionConfig() { }
 
         public GameRegionConfig(string region)
         {
@@ -217,7 +223,9 @@ namespace LodmodsDM
         public string ConfigName { get; set; }
         public string ConfigType { get; set; }
         public ModdingDirConfig ModdingDirs { get; private set; }
-        public Dictionary<string, GameRegionConfig> Regions { get; }
+        public Dictionary<string, GameRegionConfig> Regions { get; private set; }
+
+        public MainConfig() { }
 
         public MainConfig(string configName, string configType, List<string> regions)
         {
@@ -252,6 +260,15 @@ namespace LodmodsDM
 
         public void RemoveRegion(string region) { Regions.Remove(region); }
 
+        public static MainConfig ReadMainConfig(string configFileName)
+        {
+            var deserializer = new Deserializer();
+            using StreamReader reader = new StreamReader(configFileName);
+            string fileContent = reader.ReadToEnd();
+            MainConfig mainConfig = deserializer.Deserialize<MainConfig>(fileContent);
+
+            return mainConfig;
+        }
 
         public void WriteMainConfig()
         {
