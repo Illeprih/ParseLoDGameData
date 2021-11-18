@@ -43,7 +43,8 @@ namespace LodmodsDM
             "STR/TVRH.IKI", "SECT/DRGN23.BIN", "STR/BLACKH.IKI", "STR/DEIASH.IKI",
             "STR/DENIN.IKI", "STR/DENIN2.IKI", "STR/DRAGON1.IKI", "STR/DRAGON2.IKI",
             "STR/TREEH.IKI", "STR/WAR2H.IKI", "SECT/DRGN24.BIN", "STR/ENDING1H.IKI",
-            "STR/ENDING2H.IKI", "STR/MOONH.IKI", "XA/LODXA03.XA", "SYSTEM.CNF"
+            "STR/ENDING2H.IKI", "STR/MOONH.IKI", "XA/LODXA03.XA", "SYSTEM.CNF",
+            "DA/MIX.DA"
         };
     }
 }
