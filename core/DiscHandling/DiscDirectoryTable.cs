@@ -1,28 +1,58 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Text;
+using static LodmodsDM.BothEndian;
 
 namespace LodmodsDM
 {
     public class DirectoryTable
     {
-        byte _numEntries;
-        public DirectoryTableEntry[] DirectoryEntries { get; private set; }
+        public byte NumEntries { get; private set; }
+        public List<DirectoryTableEntry> DirectoryEntries { get; set; }
 
         public class DirectoryTableEntry
         {
-            byte _directoryLength;
-            byte _xaRecordLength;
-            readonly UInt32 _extentLocation; // Then big-endian copy
-            readonly UInt32 _dataLength = 0x800; //Then big-endian copy
-            readonly DirectoryDatetime _recordingDatetime;
-            readonly byte _fileFlags; // may need to implement BitFlag class at somepoint
-            readonly byte _interleavedUnitSize; // 0 means not interleaved, but shouldn't it be?
-            readonly byte _interleaveGapSize; // 0 means not interleaved
-            readonly UInt16 _volumeSequenceNumber; // Then big-endian copy
-            readonly byte _fileIdentifierLength;
-            readonly byte[] _fileIdentifier;
-            readonly byte[] _systemUse; // Not sure what 0x8D 55 58 41 means
+            public byte DirectoryLength { get; private set; }
+            public byte XARecordLength { get; private set; }
+            public UInt32 ExtentLocation { get; private set; } // Then big-endian copy
+            public DirectoryDatetime RecordingDatetime { get; private set; } //Then big-endian copy
+            public byte FileFlags { get; private set; } // may need to implement BitFlag class at somepoint
+            public byte InterleavedUnitSize { get; private set; } // 0 means not interleaved, but shouldn't it be?
+            public byte InterleaveGapSize { get; private set; } // 0 means not interleaved
+            public UInt16 VolumeSequenceNumber { get; private set; } // Then big-endian copy
+            public byte FileIdentifierLength { get; private set; }
+            public byte[] FileIdentifier { get; private set; }
+            public byte[] SystemUse { get; private set; }
+
+
+            public DirectoryTableEntry(BinaryReader reader)
+            {
+                long offset = reader.BaseStream.Position;
+                DirectoryLength = reader.ReadByte();
+                XARecordLength = reader.ReadByte();
+                ExtentLocation = ReadUInt32Both(reader);
+                RecordingDatetime = new DirectoryDatetime(reader.ReadBytes(7));
+                FileFlags = reader.ReadByte();
+                InterleavedUnitSize = reader.ReadByte();
+                InterleaveGapSize = reader.ReadByte();
+                VolumeSequenceNumber = ReadUInt16Both(reader);
+                FileIdentifierLength = reader.ReadByte();
+                FileIdentifier = reader.ReadBytes(FileIdentifierLength);
+                if (FileIdentifierLength % 2 == 0)
+                {
+                    reader.ReadByte(); // padding
+                }
+                short bytesRemaining = (short)(offset + DirectoryLength - reader.BaseStream.Position);
+                if (bytesRemaining > 0)
+                {
+                    SystemUse = reader.ReadBytes(bytesRemaining);
+                }
+                else
+                {
+                    SystemUse = new byte[0];
+                }
+            }
         }
 
         public class DirectoryDatetime
@@ -35,6 +65,8 @@ namespace LodmodsDM
             public byte Second { get; set; }
             public sbyte GMT { get; set; }
 
+            public DirectoryDatetime() { }
+
             public DirectoryDatetime(byte[] datetime)
             {
                 YearsSince1900 = datetime[0];
@@ -45,6 +77,17 @@ namespace LodmodsDM
                 Second = datetime[5];
                 GMT = Convert.ToSByte(datetime[6]);
             }
+        }
+
+        public DirectoryTable()
+        {
+            NumEntries = 0;
+            DirectoryEntries = new List<DirectoryTableEntry>();
+        }
+
+        public void AddDirectoryTableEntry(BinaryReader reader)
+        {
+            DirectoryEntries.Add(new DirectoryTableEntry(reader));
         }
     }
 }
