@@ -12,7 +12,7 @@ namespace LodmodsDM
         public static UInt16 ReadUInt16Both(BinaryReader reader)
         {
             UInt16 little = reader.ReadUInt16();
-            UInt32 big = BitConverter.ToUInt16(reader.ReadBytes(4).Reverse().ToArray());
+            UInt32 big = BitConverter.ToUInt16(reader.ReadBytes(2).Reverse().ToArray());
             if (little == big)
             {
                 return little;
