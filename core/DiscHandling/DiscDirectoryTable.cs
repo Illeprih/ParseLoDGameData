@@ -13,28 +13,15 @@ namespace LodmodsDM
 
         public class DirectoryTableEntry
         {
-            byte _directoryLength;
-            byte _xaRecordLength;
-            UInt32 _extentLocation; // Then big-endian copy
-            readonly UInt32 _dataLength; //Then big-endian copy
-            readonly DirectoryDatetime _recordingDatetime;
-            readonly byte _fileFlags; // may need to implement BitFlag class at somepoint
-            readonly byte _interleavedUnitSize; // 0 means not interleaved, but shouldn't it be?
-            readonly byte _interleaveGapSize; // 0 means not interleaved
-            readonly UInt16 _volumeSequenceNumber; // Then big-endian copy
-            readonly byte _fileIdentifierLength;
-            readonly byte[] _fileIdentifier;
-            readonly byte[] _systemUse;
-
             public byte DirectoryLength { get; private set; }
             public byte XARecordLength { get; private set; }
-            public UInt32 ExtentLocation { get; private set; }
-            public UInt32 DataLength { get; }
+            public UInt32 ExtentLocation { get; private set; } // Then big-endian copy
+            public UInt32 DataLength { get; } //Then big-endian copy
             public DirectoryDatetime RecordingDatetime { get; }
-            public byte FileFlags { get; }
-            public byte InterleavedUnitSize { get; }
-            public byte InterleaveGapSize { get; }
-            public UInt16 VolumeSequenceNumber { get; }
+            public byte FileFlags { get; } // may need to implement BitFlag class at somepoint
+            public byte InterleavedUnitSize { get; } // 0 means not interleaved, but shouldn't it be?
+            public byte InterleaveGapSize { get; } // 0 means not interleaved
+            public UInt16 VolumeSequenceNumber { get; } // Then big-endian copy
             public byte FileIdentifierLength { get; }
             public byte[] FileIdentifier { get; }
             public byte[] SystemUse { get; }
