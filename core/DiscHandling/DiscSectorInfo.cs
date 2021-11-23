@@ -6,19 +6,22 @@ namespace LodmodsDM
 {
     public class SectorInfo
     {
-        static readonly byte[] _syncPattern = new byte[]
-            { 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00 };
-        readonly byte _min;
-        readonly byte _sec;
-        readonly byte _sctr;
-        static readonly byte _mode = 0x02;
-        readonly byte[] _header; // 4 bytes
-        readonly byte _fileNum;
-        readonly byte _channelNum;
-        readonly byte _submode;
-        readonly byte _codingInfo;
-        readonly byte[] _subheader; // 8 bytes
-        byte[] _edc; // 4 bytes
-        readonly byte[] _ecc; // 276 bytes
+        public byte[] SyncPattern { get; set; }
+        public byte Minutes { get; set; }
+        public byte Seconds { get; set; }
+        public byte Sector { get; set; }
+        public byte Mode { get; set; }
+        public byte FileNumber { get; set; }
+        public byte ChannelNumber { get; set; }
+        public byte Submode { get; set; }
+        public byte CodingInfo { get; set; }
+        public byte[] EDC { get; set; } = new byte[4];
+        public byte[] ECC { get; set; } = new byte[276];
+
+        public SectorInfo() { }
+
+        public void CalculateEDC(byte[] data) { }
+
+        public void CalculateECC(byte[] data) { }
     }
 }
