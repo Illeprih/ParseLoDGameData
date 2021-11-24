@@ -9,8 +9,6 @@ namespace LodmodsDM
 {
     public class DirectoryTable
     {
-        public byte NumEntries { get; private set; }
-        public SectorInfo DirectorySectorInfo { get; private set; }
         public byte DirectoryLength { get; private set; }
         public byte XARecordLength { get; private set; }
         public UInt32 ExtentLocation { get; private set; } // Then big-endian copy
@@ -27,9 +25,10 @@ namespace LodmodsDM
         public bool HasParent { get; set; }
         public List<SectorInfo> ChildrenSectorInfo { get; private set; }
         public List<DirectoryTable> Children { get; }
+        public byte NumEntries { get; private set; }
         public byte[] Data { get; set; }
 
-        public DirectoryTable(BinaryReader reader, bool hasParent)
+        public DirectoryTable(BinaryReader reader, bool hasParent=true)
         {
             HasParent = hasParent;
 
@@ -38,7 +37,7 @@ namespace LodmodsDM
             XARecordLength = reader.ReadByte();
             ExtentLocation = ReadUInt32Both(reader);
             DataLength = ReadUInt32Both(reader);
-            RecordingDatetime = new DirectoryDatetime(reader.ReadBytes(7));
+            RecordingDatetime = new DirectoryDatetime(reader.ReadBytes(0x7));
             FileFlags = reader.ReadByte();
             InterleavedUnitSize = reader.ReadByte();
             InterleaveGapSize = reader.ReadByte();
@@ -48,16 +47,17 @@ namespace LodmodsDM
             if (FileIdentifierLength > 1 && FileIdentifier[^2..] == ";1")
             {
                 EntryType = "File";
+                ChildrenSectorInfo = new List<SectorInfo>();
                 Data = new byte[DataLength];
             }
             else { 
                 EntryType = "Directory";
                 if (HasParent) 
                 { 
-                    if (FileIdentifierLength > 1) { Children = new List<DirectoryTable>(); }
-                } else { Children = new List<DirectoryTable>(); }
+                    if (FileIdentifierLength > 1) Children = new List<DirectoryTable>();
+                } else Children = new List<DirectoryTable>(); 
 
-                if (Children != null) { ChildrenSectorInfo = new List<SectorInfo>(); }
+                if (Children != null) ChildrenSectorInfo = new List<SectorInfo>();
             }
             if (FileIdentifierLength % 2 == 0)
             {
@@ -78,7 +78,7 @@ namespace LodmodsDM
                 ChildrenSectorInfo.Add(new SectorInfo());
                 offset = reader.BaseStream.Position;
                 reader.BaseStream.Seek(ExtentLocation * 0x930, SeekOrigin.Begin);
-                ChildrenSectorInfo[^1].SyncPattern = reader.ReadBytes(12);
+                ChildrenSectorInfo[^1].SyncPattern = reader.ReadBytes(0xc);
                 ChildrenSectorInfo[^1].Minutes = reader.ReadByte();
                 ChildrenSectorInfo[^1].Seconds = reader.ReadByte();
                 ChildrenSectorInfo[^1].Sector = reader.ReadByte();
@@ -87,20 +87,19 @@ namespace LodmodsDM
                 ChildrenSectorInfo[^1].ChannelNumber = reader.ReadByte();
                 ChildrenSectorInfo[^1].Submode = reader.ReadByte();
                 ChildrenSectorInfo[^1].CodingInfo = reader.ReadByte();
-                reader.ReadBytes(4);
+                long dataStart = reader.BaseStream.Position + 0x4;
+                reader.BaseStream.Seek(0x804, SeekOrigin.Current);
+                ChildrenSectorInfo[^1].EDC = reader.ReadBytes(0x4);
+                ChildrenSectorInfo[^1].ECC = reader.ReadBytes(0x114);
+                reader.BaseStream.Seek(dataStart, SeekOrigin.Begin);
             }
 
             do
             {
-                if (EntryType != "File" && Children != null)
-                {
-                    AddDirectoryTableEntry(Children, offset, reader);
-                } else 
-                {
-                    return; 
-                }
-
-                Console.WriteLine(reader.BaseStream.Position);
+                if (EntryType != "File" && Children != null) 
+                { 
+                    AddDirectoryTableEntry(Children, offset, reader); 
+                } else return;
             } while (reader.PeekChar() != 0x00);
 
             reader.BaseStream.Seek(offset, SeekOrigin.Begin);
@@ -132,18 +131,8 @@ namespace LodmodsDM
 
         public void AddDirectoryTableEntry(List<DirectoryTable> entryList, long entryOffset, BinaryReader reader)
         {
-            entryList.Add(new DirectoryTable(reader, true));
+            entryList.Add(new DirectoryTable(reader));
             NumEntries++;
-        }
-
-        public static void Main()
-        {
-            using (BinaryReader reader = new BinaryReader(File.Open("D:/Game ROMs/The Legend of Dragoon/LOD1-4.iso", FileMode.Open)))
-            {
-                reader.BaseStream.Seek(0x93b4, SeekOrigin.Begin);
-                DirectoryTable root = new DirectoryTable(reader, false);
-                Console.WriteLine("Done");
-            }
         }
     }
 }
