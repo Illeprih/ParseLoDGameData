@@ -27,7 +27,7 @@ namespace LodmodsDM
         public UInt32 OptionalPathLLocation { get; }
         public UInt32 PathMLocation { get; } // M for MSB
         public UInt32 OptionalPathMLocation { get; }
-        public DirectoryTable Root { get; private set; }
+        public DirectoryTableEntry Root { get; private set; }
         public string VolumeSetIdentifier { get; } // 128 bytes, don't forget to pad
         public string PublisherIdentifier { get; } // 128 bytes, don't forget to pad
         public string DataPreparerIdentifier { get; } // 128 bytes, don't forget to pad
@@ -52,18 +52,9 @@ namespace LodmodsDM
 
         public PrimaryVolumeDescriptor(BinaryReader reader)
         {
-            // Get sector info
-            PVDSectorInfo.SyncPattern = reader.ReadBytes(0xc);
-            PVDSectorInfo.Minutes = reader.ReadByte();
-            PVDSectorInfo.Seconds = reader.ReadByte();
-            PVDSectorInfo.Sector = reader.ReadByte();
-            PVDSectorInfo.Mode = reader.ReadByte();
-            PVDSectorInfo.FileNumber = reader.ReadByte();
-            PVDSectorInfo.ChannelNumber = reader.ReadByte();
-            PVDSectorInfo.Submode = reader.ReadByte();
-            PVDSectorInfo.CodingInfo = reader.ReadByte();
+            PVDSectorInfo.ReadHeaderInfo(reader);
 
-            reader.ReadBytes(0xc);
+            reader.ReadBytes(0x8);
 
             // Get PVD info
             SystemIdentifier = Encoding.ASCII.GetString(reader.ReadBytes(0x20)).Trim();
@@ -79,7 +70,7 @@ namespace LodmodsDM
             OptionalPathLLocation = BitConverter.ToUInt32(reader.ReadBytes(0x4));
             PathMLocation = BitConverter.ToUInt32(reader.ReadBytes(0x4).Reverse().ToArray());
             OptionalPathMLocation = BitConverter.ToUInt32(reader.ReadBytes(0x4).Reverse().ToArray());
-            Root = new DirectoryTable(reader, false);
+            Root = new DirectoryTableEntry(reader, false);
             VolumeSetIdentifier = Encoding.ASCII.GetString(reader.ReadBytes(0x80)).Trim();
             PublisherIdentifier = Encoding.ASCII.GetString(reader.ReadBytes(0x80)).Trim();
             DataPreparerIdentifier = Encoding.ASCII.GetString(reader.ReadBytes(0x80)).Trim();
@@ -91,9 +82,8 @@ namespace LodmodsDM
             VolumeModificationDate = new PVDDatetime(reader.ReadBytes(0x11));
             VolumeExpirationDate = new PVDDatetime(reader.ReadBytes(0x11));
             VolumeEffectiveDate = new PVDDatetime(reader.ReadBytes(0x11));
-            reader.ReadBytes(0x48f);
-            PVDSectorInfo.EDC = reader.ReadBytes(0x4);
-            PVDSectorInfo.ECC = reader.ReadBytes(0x114);
+
+            PVDSectorInfo.ReadErrorCorrection(reader);
         }
 
         public class PVDDatetime
@@ -119,6 +109,16 @@ namespace LodmodsDM
                 Second = datetimeString[12..14];
                 Centisecond = datetimeString[14..16];
                 GMT = Convert.ToSByte(datetime[16]);
+            }
+        }
+
+        public static void Main()
+        {
+            using BinaryReader reader = new BinaryReader(File.Open("D:/Game ROMs/The Legend of Dragoon/LOD1-4.iso", FileMode.Open));
+            {
+                reader.BaseStream.Seek(0x9300, SeekOrigin.Begin);
+                PrimaryVolumeDescriptor pvd = new PrimaryVolumeDescriptor(reader);
+                Console.WriteLine("Done");
             }
         }
     }
