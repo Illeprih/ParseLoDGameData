@@ -111,15 +111,5 @@ namespace LodmodsDM
                 GMT = Convert.ToSByte(datetime[16]);
             }
         }
-
-        public static void Main()
-        {
-            using BinaryReader reader = new BinaryReader(File.Open("D:/Game ROMs/The Legend of Dragoon/LOD1-4.iso", FileMode.Open));
-            {
-                reader.BaseStream.Seek(0x9300, SeekOrigin.Begin);
-                PrimaryVolumeDescriptor pvd = new PrimaryVolumeDescriptor(reader);
-                Console.WriteLine("Done");
-            }
-        }
     }
 }

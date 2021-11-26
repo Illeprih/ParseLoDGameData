@@ -21,10 +21,6 @@ namespace LodmodsDM
 
         public SectorInfo() { }
 
-        public void CalculateEDC(byte[] data) { }
-
-        public void CalculateECC(byte[] data) { }
-
         public class SubmodeByte
         {
             public bool EndOfFile { get; }
@@ -69,5 +65,9 @@ namespace LodmodsDM
             EDC = reader.ReadBytes(0x4);
             ECC = reader.ReadBytes(0x114);
         }
+
+        public void CalculateEDC(byte[] data) { }
+
+        public void CalculateECC(byte[] data) { }
     }
 }
