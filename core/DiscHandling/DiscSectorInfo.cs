@@ -10,7 +10,7 @@ namespace LodmodsDM
         public byte[] SyncPattern { get; set; }
         public byte Minutes { get; set; }
         public byte Seconds { get; set; }
-        public byte Sector { get; set; }
+        public byte Sectors { get; set; }
         public byte Mode { get; set; }
         public byte FileNumber { get; set; }
         public byte ChannelNumber { get; set; }
@@ -21,27 +21,56 @@ namespace LodmodsDM
 
         public SectorInfo() { }
 
+        public SectorInfo(byte[] syncPattern, byte minutes, byte seconds, byte sectors, byte mode,
+            byte fileNumber, byte channelNumber, SubmodeByte submode, byte codingInfo)
+        {
+            SyncPattern = syncPattern;
+            Minutes = minutes;
+            Seconds = seconds;
+            Sectors = sectors;
+            Mode = mode;
+            FileNumber = fileNumber;
+            ChannelNumber = channelNumber;
+            Submode = submode;
+            CodingInfo = codingInfo;
+        }
+
         public class SubmodeByte
         {
-            public bool EndOfFile { get; }
-            public bool RealTime { get; }
-            public bool Form2 { get; }
-            public bool Trigger { get; }
-            public bool Data { get; }
-            public bool Audio { get; }
-            public bool Video { get; }
-            public bool EndOfRecord { get; }
+            public byte EndOfFile { get; private set; }
+            public byte RealTime { get; private set; }
+            public byte Form2 { get; private set; }
+            public byte Trigger { get; private set; }
+            public byte Data { get; private set; }
+            public byte Audio { get; private set; }
+            public byte Video { get; private set; }
+            public byte EndOfRecord { get; private set; }
 
             public SubmodeByte(byte flagByte)
             {
-                EndOfFile = Convert.ToBoolean(flagByte & 128);
-                RealTime = Convert.ToBoolean(flagByte & 64);
-                Form2 = Convert.ToBoolean(flagByte & 32);
-                Trigger = Convert.ToBoolean(flagByte & 16);
-                Data = Convert.ToBoolean(flagByte & 8);
-                Audio = Convert.ToBoolean(flagByte & 4);
-                Video = Convert.ToBoolean(flagByte & 2);
-                EndOfRecord = Convert.ToBoolean(flagByte & 1);
+                ConvertByteToSubmode(flagByte);
+            }
+
+            public void ConvertByteToSubmode(byte flagByte)
+            {
+                EndOfFile = (byte)((flagByte & 128)>>7);
+                RealTime = (byte)((flagByte & 64)>>6);
+                Form2 = (byte)((flagByte & 32)>>5);
+                Trigger = (byte)((flagByte & 16)>>4);
+                Data = (byte)((flagByte & 8)>>3);
+                Audio = (byte)((flagByte & 4)>>2);
+                Video = (byte)((flagByte & 2)>>1);
+                EndOfRecord = (byte)(flagByte & 1);
+            }
+
+            public static SubmodeByte ByteToSubmode(byte flagByte)
+            {
+                return new SubmodeByte(flagByte);
+            }
+
+            public byte SubmodeToByte()
+            {
+                return (byte)(EndOfFile<<7 | RealTime<<6 | Form2<<5 | Trigger<<4 | Data<<3 | Audio<<2 | Video<<1 | EndOfRecord);
             }
         }
 
@@ -50,7 +79,7 @@ namespace LodmodsDM
             SyncPattern = reader.ReadBytes(0xc);
             Minutes = reader.ReadByte();
             Seconds = reader.ReadByte();
-            Sector = reader.ReadByte();
+            Sectors = reader.ReadByte();
             Mode = reader.ReadByte();
             FileNumber = reader.ReadByte();
             ChannelNumber = reader.ReadByte();
@@ -66,8 +95,43 @@ namespace LodmodsDM
             ECC = reader.ReadBytes(0x114);
         }
 
-        public void CalculateEDC(byte[] data) { }
+        public byte[] CalculateEDC(byte[] data) 
+        {
+            byte[] edcData = new byte[0x808];
+            byte[] subheader = new byte[8] { FileNumber, ChannelNumber, Submode.SubmodeToByte(), CodingInfo,
+                                             FileNumber, ChannelNumber, Submode.SubmodeToByte(), CodingInfo };
+            Buffer.BlockCopy(subheader, 0, edcData, 0, 0x8);
+            Buffer.BlockCopy(data, 0, edcData, 0x8, 0x800);
 
-        public void CalculateECC(byte[] data) { }
+            EDC = new CRC32().CalculateCRC(edcData);
+
+            return EDC;
+        }
+
+        public byte[] CalculateECC(byte[] data) 
+        {
+            byte[] parityPData = new byte[0x810];
+            byte[] parityQData = new byte[0x8bc];
+            byte[] header = new byte[4] { Minutes, Seconds, Sectors, Mode };
+            byte[] subheader = new byte[8] { FileNumber, ChannelNumber, Submode.SubmodeToByte(), CodingInfo,
+                                             FileNumber, ChannelNumber, Submode.SubmodeToByte(), CodingInfo };
+            Buffer.BlockCopy(header, 0, parityPData, 0, 0x4);
+            Buffer.BlockCopy(subheader, 0, parityPData, 0x4, 0x8);
+            Buffer.BlockCopy(data, 0, parityPData, 0xc, 0x800);
+            Buffer.BlockCopy(EDC, 0, parityPData, 0x80c, 0x4);
+
+            // Do stuff
+            byte[] parityP = new byte[0xac];
+
+            Buffer.BlockCopy(parityPData, 0, parityQData, 0, 0x810);
+            Buffer.BlockCopy(parityP, 0, parityQData, 0x810, 0xac);
+
+            // Do stuff
+            byte[] parityQ = new byte[0x68];
+            //Buffer.BlockCopy(parityP, 0, ECC, 0, 0xac);
+            //Buffer.BlockCopy(parityQ, 0, ECC, 0xac, 0x68);
+
+            return ECC;
+        }
     }
 }
