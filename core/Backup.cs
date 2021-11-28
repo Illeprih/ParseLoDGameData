@@ -15,7 +15,7 @@ namespace LodmodsDM
                 File.Copy(inputFile, inputBackup);
             } else if (restoreFromBackup)
             {
-                if (!hideOutput) Console.WriteLine($"Restoring {inputFile} from backup}.");
+                if (!hideOutput) Console.WriteLine($"Restoring {inputFile} from backup.");
                 File.Copy(inputBackup, inputFile, true);
             }
         }
