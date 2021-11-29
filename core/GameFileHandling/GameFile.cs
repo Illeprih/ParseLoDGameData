@@ -9,6 +9,7 @@ namespace LodmodsDM
     public class GameFile
     {
         public string Filename { get; set; }
+        public bool IsForm2 { get; set; }
         public string FileType { get; set; }
         public uint DataLength { get; set; }
         public bool UsesSectorPadding { get; }
@@ -47,16 +48,40 @@ namespace LodmodsDM
         {
             if (!File.Exists(filepath)) throw new FileNotFoundException($"{filepath} does not exist.");
 
+            uint fileSize = (uint)new FileInfo(filepath).Length;
+            if (fileSize % 0x800 == 0) IsForm2 = false;
+            else if ((fileSize - 0x2c) % 0x930 == 0) IsForm2 = true;
+            else throw new InvalidDataException("Main game file size must be divisible by 2048 for data files and 2352 for XA/IKI files.");
+            uint sectorDataSize = (uint)(IsForm2 ? 0x930 : 0x800);
+            uint newSectorCount = fileSize / sectorDataSize;
+
+            int sectorDiff = (int)newSectorCount - DataSectorInfo.Count;
+            if (sectorDiff < 0)
+            {
+                DataSectorInfo.RemoveRange((int)newSectorCount, sectorDiff);
+                if (DataSectorInfo[^1].Submode.RealTime == 1) DataSectorInfo[^1].Submode.EndOfFile = 1;
+                else {
+                    DataSectorInfo[^1].Submode.EndOfFile = 1;
+                    DataSectorInfo[^1].Submode.EndOfRecord = 1;
+                }
+                Data.SetLength(fileSize);
+                DataLength = fileSize;
+            }
+
             using BinaryReader reader = new BinaryReader(File.Open(filepath, FileMode.Open));
             {
                 Data.Seek(0, SeekOrigin.Begin);
+                reader.BaseStream.CopyTo(Data);
+                Data.Seek(0, SeekOrigin.Begin);
+                /*Data.Seek(0, SeekOrigin.Begin);
 
                 int remainingFileLength = (int)reader.BaseStream.Length;
+                int sectorIndex;
+                int dataSize;
                 bool stopEarly = false;
                 foreach (SectorInfo info in DataSectorInfo)
                 {
-                    int dataSize;
-                    int sectorIndex = DataSectorInfo.IndexOf(info);
+                    sectorIndex = DataSectorInfo.IndexOf(info);
                     if (info.Submode.Data == 1) dataSize = 0x800;
                     else if (info.Submode.Audio == 1) dataSize = 0x930;
                     else throw new System.Data.DataException($"{filepath} sector {sectorIndex} is not data or audio.");
@@ -81,12 +106,11 @@ namespace LodmodsDM
                     {
                         Data.Seek(-dataSize, SeekOrigin.Current);
                         Data.Write(newSectorData);
-                        if (newSectorData.Length < dataSize) Data.Write(new byte[dataSize-newSectorData.Length]);
 
                         if (dataSize == 0x800)
                         {
-                            Data.Write(info.CalculateEDC(newSectorData));
-                            Data.Write(info.CalculateECC(newSectorData));
+                            info.CalculateEDC(newSectorData);
+                            info.CalculateECC(newSectorData);
                         }
                     }
 
@@ -96,7 +120,7 @@ namespace LodmodsDM
 
                 if (remainingFileLength > 0)
                 {
-                    int dataSize = 0x800; // Can only make this work for data files for now
+                    dataSize = 0x800; // Can only make this work for data files for now
                     int overflowSectorCount = (int)Math.Ceiling((double)remainingFileLength / 0x800);
 
                     SectorInfo lastSector = DataSectorInfo[^1];
@@ -126,7 +150,7 @@ namespace LodmodsDM
                         newSector.CalculateECC(currentSector);
                     }
                     DataLength = (uint)Data.Length;
-                }
+                }*/
             }
         }
 
