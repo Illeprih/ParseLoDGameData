@@ -37,14 +37,14 @@ namespace LodmodsDM
 
         public class SubmodeByte
         {
-            public byte EndOfFile { get; private set; }
+            public byte EndOfFile { get; set; }
             public byte RealTime { get; private set; }
             public byte Form2 { get; private set; }
             public byte Trigger { get; private set; }
             public byte Data { get; private set; }
             public byte Audio { get; private set; }
             public byte Video { get; private set; }
-            public byte EndOfRecord { get; private set; }
+            public byte EndOfRecord { get; set; }
 
             public SubmodeByte(byte flagByte)
             {
@@ -95,13 +95,13 @@ namespace LodmodsDM
             ECC = reader.ReadBytes(0x114);
         }
 
-        public byte[] CalculateEDC(byte[] data) 
+        public byte[] CalculateEDC(byte[] data, int dataSize) 
         {
-            byte[] edcData = new byte[0x808];
+            byte[] edcData = new byte[dataSize + 8];
             byte[] subheader = new byte[8] { FileNumber, ChannelNumber, Submode.SubmodeToByte(), CodingInfo,
                                              FileNumber, ChannelNumber, Submode.SubmodeToByte(), CodingInfo };
             Buffer.BlockCopy(subheader, 0, edcData, 0, 0x8);
-            Buffer.BlockCopy(data, 0, edcData, 0x8, 0x800);
+            Buffer.BlockCopy(data, 0, edcData, 0x8, dataSize);
 
             EDC = new CRC32().CalculateCRC(edcData);
 
