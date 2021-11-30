@@ -56,19 +56,10 @@ namespace LodmodsDM
 
                 if (Children != null) ChildDirSectorInfo = new List<SectorInfo>();
             }
-            if (FileIdentifierLength % 2 == 0)
-            {
-                reader.ReadByte(); // padding
-            }
+            if (FileIdentifierLength % 2 == 0) reader.ReadByte(); // padding
+
             short bytesRemaining = (short)(offset + DirectoryLength - reader.BaseStream.Position);
-            if (bytesRemaining > 0)
-            {
-                SystemUse = reader.ReadBytes(bytesRemaining);
-            }
-            else
-            {
-                SystemUse = new byte[0];
-            }
+            SystemUse = bytesRemaining > 0 ? reader.ReadBytes(bytesRemaining) : new byte[0];
 
             if (EntryType != "File" && Children != null)
             {
@@ -82,7 +73,7 @@ namespace LodmodsDM
             {
                 if (EntryType != "File" && Children != null)
                 {
-                    AddDirectoryTableEntry(Children, offset, reader);
+                    AddDirectoryTableEntry(Children, reader);
                 } else return;
             } while (reader.PeekChar() != 0x00);
 
@@ -114,7 +105,7 @@ namespace LodmodsDM
             }
         }
 
-        public void AddDirectoryTableEntry(List<DirectoryTableEntry> entryList, long entryOffset, BinaryReader reader)
+        public void AddDirectoryTableEntry(List<DirectoryTableEntry> entryList, BinaryReader reader)
         {
             entryList.Add(new DirectoryTableEntry(reader));
             NumEntries++;

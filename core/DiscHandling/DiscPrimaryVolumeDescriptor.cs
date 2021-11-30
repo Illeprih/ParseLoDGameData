@@ -27,6 +27,10 @@ namespace LodmodsDM
         public UInt32 OptionalPathLLocation { get; }
         public UInt32 PathMLocation { get; } // M for MSB
         public UInt32 OptionalPathMLocation { get; }
+        public PathTable PathL { get; }
+        public PathTable OptionalPathL { get; }
+        public PathTable PathM { get; }
+        public PathTable OptionalPathM { get; }
         public DirectoryTableEntry Root { get; private set; }
         public string VolumeSetIdentifier { get; } // 128 bytes, don't forget to pad
         public string PublisherIdentifier { get; } // 128 bytes, don't forget to pad
@@ -67,9 +71,13 @@ namespace LodmodsDM
             LogicalBlockSize = ReadUInt16Both(reader);
             PathTableSize = ReadUInt32Both(reader);
             PathLLocation = BitConverter.ToUInt32(reader.ReadBytes(0x4));
+            PathL = new PathTable(reader, PathLLocation, true, false);
             OptionalPathLLocation = BitConverter.ToUInt32(reader.ReadBytes(0x4));
+            OptionalPathL = new PathTable(reader, OptionalPathLLocation, true, true);
             PathMLocation = BitConverter.ToUInt32(reader.ReadBytes(0x4).Reverse().ToArray());
+            PathM = new PathTable(reader, PathMLocation, false, false);
             OptionalPathMLocation = BitConverter.ToUInt32(reader.ReadBytes(0x4).Reverse().ToArray());
+            OptionalPathM = new PathTable(reader, OptionalPathMLocation, false, true);
             Root = new DirectoryTableEntry(reader, false);
             VolumeSetIdentifier = Encoding.ASCII.GetString(reader.ReadBytes(0x80)).Trim();
             PublisherIdentifier = Encoding.ASCII.GetString(reader.ReadBytes(0x80)).Trim();
