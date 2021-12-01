@@ -131,8 +131,6 @@ namespace LodmodsDM
             } else dataToShift = new byte[0];
             brw.BaseStream.Seek(fileOffset, SeekOrigin.Begin);
 
-            Stopwatch watch = new Stopwatch();
-            watch.Start();
             int sectorIndex = 0;
             int dataSize;
             foreach (SectorInfo info in file.DataSectorInfo)
@@ -154,33 +152,16 @@ namespace LodmodsDM
                 brw.BaseStream.Write(info.EDC);
                 if (dataSize == 0x800)
                 {
-                    //info.CalculateECC(data);
+                    info.CalculateECC(data);
                     brw.BaseStream.Write(info.ECC);
                 }
                 sectorIndex++;
             }
-            watch.Stop();
-            Console.WriteLine(watch.Elapsed.TotalSeconds.ToString());
 
             brw.BaseStream.Seek(fileOffset + fileEntry.DataLength / 0x800 * 0x930, SeekOrigin.Begin);
             brw.BaseStream.Write(dataToShift);
 
             brw.BaseStream.Seek(fileOffset, SeekOrigin.Begin);
-        }
-
-        public static void Main()
-        {
-            Stopwatch sw = new Stopwatch();
-            Backup.BackupFile("D:/LodModding/Utils/lod_hack_tools/LOD1-4.iso", true);
-            Disc disc = new Disc("D:/LodModding/Utils/lod_hack_tools/LOD1-4.iso", "D:/Game ROMs/The Legend of Dragoon/game_files/USA/Disc 1");
-            //disc.ExtractDiscFile("SECT/DRGN21.BIN", true);
-
-            sw.Start();
-            disc.InsertDiscFile("SECT/DRGN21.BIN", true);
-            Console.WriteLine("Done");
-            sw.Stop();
-            Console.WriteLine(sw.Elapsed.TotalSeconds.ToString());
-            Console.ReadLine();
         }
     }
 }

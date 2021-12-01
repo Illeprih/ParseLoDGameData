@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using static LodmodsDM.Globals;
 
 namespace LodmodsDM
 {
@@ -99,37 +100,71 @@ namespace LodmodsDM
         {
             byte[] edcData = new byte[dataSize + 8];
             byte[] subheader = new byte[8] { FileNumber, ChannelNumber, Submode.SubmodeToByte(), CodingInfo,
-                                             FileNumber, ChannelNumber, Submode.SubmodeToByte(), CodingInfo };
+                                                FileNumber, ChannelNumber, Submode.SubmodeToByte(), CodingInfo };
             Buffer.BlockCopy(subheader, 0, edcData, 0, 0x8);
             Buffer.BlockCopy(data, 0, edcData, 0x8, dataSize);
 
-            EDC = new CRC32().CalculateCRC(edcData);
+            // Calculate CRC32
+            long crc = 0;
+            for (int i = 0; i < dataSize + 8; i++)
+            {
+                crc = (crc >> 8) ^ EDC_TABLE[(int)(crc & 0xFF) ^ edcData[i] & 0xff] & 0xffffffffL;
+            }
+
+            EDC = BitConverter.GetBytes((uint)(crc ^ 0x00000000));
 
             return EDC;
+        }
+
+        public byte[] ComputeECCBlock(byte[] src, uint major_count, uint minor_count,
+                                     uint major_mult, uint minor_inc)
+        {
+            uint size = major_count * minor_count;
+            uint major, minor;
+            byte[] dest = new byte[2 * major_count];
+            for (major = 0; major < major_count; major++)
+            {
+                uint index = (major >> 1) * major_mult + (major & 1);
+                byte ecc_a = 0;
+                byte ecc_b = 0;
+                for (minor = 0; minor < minor_count; minor++)
+                {
+                    byte temp = src[index];
+                    index += minor_inc;
+                    if (index >= size) index -= size;
+                    ecc_a ^= temp;
+                    ecc_b ^= temp;
+                    ecc_a = ECC_F_LUT[ecc_a];
+                }
+                ecc_a = ECC_B_LUT[ECC_F_LUT[ecc_a] ^ ecc_b];
+                dest[major] = ecc_a;
+                dest[major + major_count] = (byte)(ecc_a ^ ecc_b);
+            }
+            return dest;
         }
 
         public byte[] CalculateECC(byte[] data) 
         {
             byte[] parityPData = new byte[0x810];
             byte[] parityQData = new byte[0x8bc];
-            byte[] header = new byte[4] { Minutes, Seconds, Sectors, Mode };
+            // Header is zeroed out in Mode 2 ECC
             byte[] subheader = new byte[8] { FileNumber, ChannelNumber, Submode.SubmodeToByte(), CodingInfo,
                                              FileNumber, ChannelNumber, Submode.SubmodeToByte(), CodingInfo };
-            Buffer.BlockCopy(header, 0, parityPData, 0, 0x4);
             Buffer.BlockCopy(subheader, 0, parityPData, 0x4, 0x8);
             Buffer.BlockCopy(data, 0, parityPData, 0xc, 0x800);
             Buffer.BlockCopy(EDC, 0, parityPData, 0x80c, 0x4);
 
-            // Do stuff
-            byte[] parityP = new byte[0xac];
+
+            byte[] parityP = ComputeECCBlock(parityPData, 86, 24, 2, 86);
 
             Buffer.BlockCopy(parityPData, 0, parityQData, 0, 0x810);
             Buffer.BlockCopy(parityP, 0, parityQData, 0x810, 0xac);
 
-            // Do stuff
-            byte[] parityQ = new byte[0x68];
-            //Buffer.BlockCopy(parityP, 0, ECC, 0, 0xac);
-            //Buffer.BlockCopy(parityQ, 0, ECC, 0xac, 0x68);
+            byte[] parityQ = ComputeECCBlock(parityQData, 52, 43, 86, 88);
+
+            byte[] ECC = new byte[0x114];
+            Buffer.BlockCopy(parityP, 0, ECC, 0, 0xac);
+            Buffer.BlockCopy(parityQ, 0, ECC, 0xac, 0x68);
 
             return ECC;
         }
