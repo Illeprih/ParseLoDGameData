@@ -38,35 +38,35 @@ namespace LodmodsDM
 
         public class SubmodeByte
         {
-            public byte EndOfFile { get; set; }
+            public byte EndOfFile { get; private set; }
             public byte RealTime { get; private set; }
             public byte Form2 { get; private set; }
             public byte Trigger { get; private set; }
             public byte Data { get; private set; }
             public byte Audio { get; private set; }
             public byte Video { get; private set; }
-            public byte EndOfRecord { get; set; }
+            public byte EndOfRecord { get; private set; }
 
             public SubmodeByte(byte flagByte)
             {
-                ConvertByteToSubmode(flagByte);
+                ByteToSubmode(flagByte);
             }
 
-            public void ConvertByteToSubmode(byte flagByte)
-            {
-                EndOfFile = (byte)((flagByte & 128)>>7);
-                RealTime = (byte)((flagByte & 64)>>6);
-                Form2 = (byte)((flagByte & 32)>>5);
-                Trigger = (byte)((flagByte & 16)>>4);
-                Data = (byte)((flagByte & 8)>>3);
-                Audio = (byte)((flagByte & 4)>>2);
-                Video = (byte)((flagByte & 2)>>1);
-                EndOfRecord = (byte)(flagByte & 1);
-            }
-
-            public static SubmodeByte ByteToSubmode(byte flagByte)
+            public static SubmodeByte GenerateSubmode(byte flagByte)
             {
                 return new SubmodeByte(flagByte);
+            }
+
+            public void ByteToSubmode(byte flagByte)
+            {
+                EndOfFile = (byte)((flagByte & 128) >> 7);
+                RealTime = (byte)((flagByte & 64) >> 6);
+                Form2 = (byte)((flagByte & 32) >> 5);
+                Trigger = (byte)((flagByte & 16) >> 4);
+                Data = (byte)((flagByte & 8) >> 3);
+                Audio = (byte)((flagByte & 4) >> 2);
+                Video = (byte)((flagByte & 2) >> 1);
+                EndOfRecord = (byte)(flagByte & 1);
             }
 
             public byte SubmodeToByte()
@@ -154,7 +154,6 @@ namespace LodmodsDM
             Buffer.BlockCopy(data, 0, parityPData, 0xc, 0x800);
             Buffer.BlockCopy(EDC, 0, parityPData, 0x80c, 0x4);
 
-
             byte[] parityP = ComputeECCBlock(parityPData, 86, 24, 2, 86);
 
             Buffer.BlockCopy(parityPData, 0, parityQData, 0, 0x810);
@@ -162,7 +161,6 @@ namespace LodmodsDM
 
             byte[] parityQ = ComputeECCBlock(parityQData, 52, 43, 86, 88);
 
-            byte[] ECC = new byte[0x114];
             Buffer.BlockCopy(parityP, 0, ECC, 0, 0xac);
             Buffer.BlockCopy(parityQ, 0, ECC, 0xac, 0x68);
 
