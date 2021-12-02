@@ -44,114 +44,88 @@ namespace LodmodsDM
             return (byte)(upper + lower);
         }
 
-        public void ReadMainGameFile(string filepath)
+        public byte[] ReadMainGameFile(string filepath)
         {
             if (!File.Exists(filepath)) throw new FileNotFoundException($"{filepath} does not exist.");
 
             uint fileSize = (uint)new FileInfo(filepath).Length;
-            if (fileSize % 0x800 == 0) IsForm2 = false;
-            else if ((fileSize - 0x2c) % 0x930 == 0) IsForm2 = true;
+
+            uint sectorDataSize;
+            if (fileSize % 0x800 == 0)
+            {
+                IsForm2 = false;
+                sectorDataSize = 0x800;
+            }
+            else if ((fileSize - 0x2c) % 0x930 == 0)
+            {
+                IsForm2 = true;
+                sectorDataSize = 0x930;
+            }
             else throw new InvalidDataException("Main game file size must be divisible by 2048 for data files and 2352 for XA/IKI files.");
-            uint sectorDataSize = (uint)(IsForm2 ? 0x930 : 0x800);
+            
             uint newSectorCount = fileSize / sectorDataSize;
 
+            using BinaryReader reader = new BinaryReader(File.Open(filepath, FileMode.Open));
             int sectorDiff = (int)newSectorCount - DataSectorInfo.Count;
+            SectorInfo lastSector;
+            byte minutes = 0;
+            byte seconds = 0;
+            byte sectors = 0;
             if (sectorDiff < 0)
             {
                 DataSectorInfo.RemoveRange((int)newSectorCount, sectorDiff);
-                if (DataSectorInfo[^1].Submode.RealTime == 1) DataSectorInfo[^1].Submode.EndOfFile = 1;
-                else {
-                    DataSectorInfo[^1].Submode.EndOfFile = 1;
-                    DataSectorInfo[^1].Submode.EndOfRecord = 1;
-                }
-                Data.SetLength(fileSize);
-                DataLength = fileSize;
+                lastSector = DataSectorInfo[^1];
+                byte eofEOR = (byte)(lastSector.Submode.RealTime == 1 ? 0x80 : 0x81);
+                byte newSubmodeByte = (byte)(lastSector.Submode.SubmodeToByte() ^ eofEOR);
+                lastSector.Submode.ByteToSubmode(newSubmodeByte);
             }
-
-            using BinaryReader reader = new BinaryReader(File.Open(filepath, FileMode.Open));
+            else if (sectorDiff > 0)
             {
-                Data.Seek(0, SeekOrigin.Begin);
-                reader.BaseStream.CopyTo(Data);
-                Data.Seek(0, SeekOrigin.Begin);
-                /*Data.Seek(0, SeekOrigin.Begin);
-
-                int remainingFileLength = (int)reader.BaseStream.Length;
-                int sectorIndex;
-                int dataSize;
-                bool stopEarly = false;
-                foreach (SectorInfo info in DataSectorInfo)
+                if (IsForm2)
                 {
-                    sectorIndex = DataSectorInfo.IndexOf(info);
-                    if (info.Submode.Data == 1) dataSize = 0x800;
-                    else if (info.Submode.Audio == 1) dataSize = 0x930;
-                    else throw new System.Data.DataException($"{filepath} sector {sectorIndex} is not data or audio.");
-
-                    byte[] newSectorData = reader.ReadBytes(dataSize);
-                    if (0 < newSectorData.Length && newSectorData.Length < dataSize) 
-                        throw new System.Data.DataException($"Should always be getting sector aligned data for main game file.");
-
-                    if (remainingFileLength == dataSize && sectorIndex < DataSectorInfo.Count)
+                    reader.BaseStream.Seek(DataLength, SeekOrigin.Begin);
+                    for (int i = sectorDiff; i > 0; i--)
                     {
-                        info.Submode.ConvertByteToSubmode(0x89); // Only for data sectors atm, still no idea how XA decides what EOF is
-                        int sectorUnderflow = DataSectorInfo.Count - sectorIndex - 1;
-                        DataSectorInfo.RemoveRange(sectorIndex + 1, sectorUnderflow);
-                        Data.SetLength(Data.Length - (sectorUnderflow * dataSize));
-                        DataLength = (uint)Data.Length;
-                        stopEarly = true;
+                        SectorInfo newSectorInfo = new SectorInfo();
+                        newSectorInfo.ReadHeaderInfo(reader);
+                        reader.BaseStream.Seek(0x918, SeekOrigin.Current);
                     }
-
-                    byte[] oldData = new byte[dataSize];
-                    Data.Read(oldData, 0, dataSize);
-                    if (!newSectorData.SequenceEqual(oldData))
-                    {
-                        Data.Seek(-dataSize, SeekOrigin.Current);
-                        Data.Write(newSectorData);
-
-                        if (dataSize == 0x800)
-                        {
-                            info.CalculateEDC(newSectorData);
-                            info.CalculateECC(newSectorData);
-                        }
-                    }
-
-                    remainingFileLength -= dataSize;
-                    if (stopEarly) break;
                 }
-
-                if (remainingFileLength > 0)
+                else
                 {
-                    dataSize = 0x800; // Can only make this work for data files for now
-                    int overflowSectorCount = (int)Math.Ceiling((double)remainingFileLength / 0x800);
+                    lastSector = DataSectorInfo[^1];
+                    lastSector.Submode.ByteToSubmode((byte)(lastSector.Submode.SubmodeToByte() & 0x7e));
+                    minutes = BCDToByte(lastSector.Minutes);
+                    seconds = BCDToByte(lastSector.Seconds);
+                    sectors = BCDToByte(lastSector.Sectors);
 
-                    SectorInfo lastSector = DataSectorInfo[^1];
-                    byte sectors = BCDToByte(lastSector.Sectors);
-                    byte seconds = BCDToByte(lastSector.Seconds);
-                    byte minutes = BCDToByte(lastSector.Minutes);
-                    lastSector.Submode.ConvertByteToSubmode(0x8);
-
-                    byte[] currentSector = new byte[dataSize];
-                    for (int i = overflowSectorCount; i > 0; i--)
+                    for (int i = sectorDiff; i > 0; i--)
                     {
-                        currentSector = reader.ReadBytes(dataSize);
-
-                        sectors = sectors == 74 ? (byte)0 : (byte)(sectors + 1);
-                        seconds = sectors == 0 ? (seconds == 60 ? (byte)0 : (byte)(seconds + 1)) : seconds;
-                        minutes = seconds == 0 ? (byte)(minutes + 1) : minutes;
+                        minutes = seconds == 59 && sectors == 73 ? (byte)(minutes + 1) : minutes;
+                        seconds = sectors == 73 ? (seconds == 59 ? (byte)0 : (byte)(seconds + 1)) : seconds;
+                        sectors = sectors == 73 ? (byte)0 : (byte)(sectors + 1);
                         byte bcdSectors = ByteToBCD(sectors);
                         byte bcdSeconds = ByteToBCD(seconds);
                         byte bcdMinutes = ByteToBCD(minutes);
-                        SectorInfo.SubmodeByte submode = i == 1 ? SectorInfo.SubmodeByte.ByteToSubmode(0x89)
-                            : SectorInfo.SubmodeByte.ByteToSubmode(0x8);
-                        SectorInfo newSector = new SectorInfo(Globals.SYNC_PATTERN, bcdMinutes, bcdSeconds, bcdSectors, 
+                        SectorInfo.SubmodeByte submode = i == 1 ? SectorInfo.SubmodeByte.GenerateSubmode(0x89)
+                            : SectorInfo.SubmodeByte.GenerateSubmode(0x8); // These are the only submode values in form 1 sectors
+                        SectorInfo newSector = new SectorInfo(Globals.SYNC_PATTERN, bcdMinutes, bcdSeconds, bcdSectors,
                             lastSector.Mode, lastSector.FileNumber, lastSector.ChannelNumber, submode, lastSector.CodingInfo);
                         DataSectorInfo.Add(newSector);
-                        Data.Write(currentSector);
-                        newSector.CalculateEDC(currentSector);
-                        newSector.CalculateECC(currentSector);
                     }
-                    DataLength = (uint)Data.Length;
-                }*/
+                }
             }
+
+            Data.SetLength(fileSize);
+            DataLength = fileSize;
+
+            reader.BaseStream.Seek(0, SeekOrigin.Begin);
+            Data.Seek(0, SeekOrigin.Begin);
+            reader.BaseStream.CopyTo(Data);
+
+            Data.Seek(0, SeekOrigin.Begin);
+
+            return new byte[3] { minutes, seconds, sectors };
         }
 
         public void WriteGameFile(string filename)

@@ -113,20 +113,19 @@ namespace LodmodsDM
             string name = fileEntry.FileIdentifier.Split(";")[0];
             string parentDirectory = fileParts.Length > 1 ? Path.Combine(fileParts[..^1]) : "";
 
-            Console.WriteLine("before");
             GameFile file = ExtractDiscFile(filename);
-            Console.WriteLine("after");
-            file.ReadMainGameFile("D:/Game ROMs/The Legend of Dragoon/game_files/USA/Disc 1/SECT/DRGN21.BIN");
-            Console.WriteLine("Here");
-
+            byte[] updatedMSS = file.ReadMainGameFile("D:/Game ROMs/The Legend of Dragoon/game_files/USA/Disc 1/SECT/DRGN21.BIN");
+            // TODO: need to report changes in file size for directory update
+            // Can be done with if (DataLength != PVD whatever length)
             int fileOffset = (int)(fileEntry.ExtentLocation * 0x930);
 
-            // Need to update all sectors that exist after file inserted
+            // TODO: Need to update all sectors that exist after file inserted
+            // if (!updatedMSS.All(i => i == 0))
             using BinaryReader brw = new BinaryReader(File.Open(FilePath, FileMode.Open, FileAccess.ReadWrite));
             byte[] dataToShift;
-            if (file.Data.Length > brw.BaseStream.Length)
+            if (file.DataLength > fileEntry.DataLength)
             {
-                brw.BaseStream.Seek(fileOffset + fileEntry.DataLength / 0x800 * 0x930, SeekOrigin.Begin);
+                brw.BaseStream.Seek(fileOffset + fileEntry.DataLength / 0x800 * 0x930, SeekOrigin.Begin);  // TODO: I think this needs adjusting based on Form 1 vs Form 2
                 dataToShift = brw.ReadBytes((int)(brw.BaseStream.Length - brw.BaseStream.Position));
             } else dataToShift = new byte[0];
             brw.BaseStream.Seek(fileOffset, SeekOrigin.Begin);
@@ -135,19 +134,19 @@ namespace LodmodsDM
             int dataSize;
             foreach (SectorInfo info in file.DataSectorInfo)
             {
-                if (info.Submode.Data == 1) dataSize = 0x800;
-                else if (info.Submode.Audio == 1) dataSize = 0x914;
-                else throw new System.Data.DataException($"{filename} sector {sectorIndex} is not data or audio.");
+                dataSize = info.Submode.Form2 == 1 ? 0x914 : 0x800;
 
                 byte[] subheader = { info.FileNumber, info.ChannelNumber, info.Submode.SubmodeToByte(), info.CodingInfo,
                                         info.FileNumber, info.ChannelNumber, info.Submode.SubmodeToByte(), info.CodingInfo };
                 brw.ReadBytes(0x10);
                 brw.BaseStream.Write(subheader, 0, 0x8);
+
                 byte[] data = new byte[dataSize];
                 if (dataSize == 0x914) file.Data.Seek(0x18, SeekOrigin.Current);
                 file.Data.Read(data, 0, dataSize);
                 if (dataSize == 0x914) file.Data.Seek(0x4, SeekOrigin.Current);
                 brw.BaseStream.Write(data);
+
                 info.CalculateEDC(data, dataSize);
                 brw.BaseStream.Write(info.EDC);
                 if (dataSize == 0x800)
@@ -158,7 +157,7 @@ namespace LodmodsDM
                 sectorIndex++;
             }
 
-            brw.BaseStream.Seek(fileOffset + fileEntry.DataLength / 0x800 * 0x930, SeekOrigin.Begin);
+            brw.BaseStream.Seek(fileOffset + file.DataLength / 0x800 * 0x930, SeekOrigin.Begin);
             brw.BaseStream.Write(dataToShift);
 
             brw.BaseStream.Seek(fileOffset, SeekOrigin.Begin);
