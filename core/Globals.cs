@@ -7,6 +7,8 @@ namespace LodmodsDM
         public static readonly byte[] SYNC_PATTERN = new byte[]
             { 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00 };
 
+        public static readonly byte[] RIFF = new byte[4] { 0x52, 0x49, 0x46, 0x46 };
+
         public static readonly Dictionary<string, string[]> REGION_CODES = new Dictionary<string, string[]>
         {
             { "USA", new string[] { "SCUS_944.91", "SCUS_945.84", "SCUS_945.85", "SCUS_945.86" } },

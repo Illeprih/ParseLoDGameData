@@ -57,20 +57,17 @@ namespace LodmodsDM
             } else return returnEntry;
         }
 
-        public GameFile ExtractDiscFile(string filename, bool extractToDrive = false)
+        public MainGameFile ExtractDiscFile(string filename, bool extractToDrive = false)
         {
             string[] fileParts = filename.Split("/");
 
             DirectoryTableEntry fileEntry = MatchPVDEntry(PVD.Root, fileParts);
-            string name = fileEntry.FileIdentifier.Split(";")[0];
-            bool usesSectorPadding = name.Contains("OV_") || name.Contains("IKI") ? false : true;
-            string parentDirectory = fileParts.Length > 1 ? Path.Combine(fileParts[..^1]) : "";
+            string name = fileEntry.FileIdentifier.Split(";")[0].ToUpper();
+            bool usesSectorPadding = name.Contains("DRGN");
+            string discDirectory = fileParts.Length > 1 ? Path.Combine(fileParts[..^1]) : "";
 
-            GameFile file = new GameFile(name, fileEntry.DataLength, usesSectorPadding, parentDirectory, null);
-
-            string fullExtractedPath = Path.Combine(ExtractedFileDirectory, parentDirectory);
-            string fullExtractedFilename = Path.Combine(ExtractedFileDirectory, filename);
-            if (!Directory.Exists(fullExtractedPath)) Directory.CreateDirectory(fullExtractedPath);
+            MainGameFile file = new MainGameFile(name, discDirectory, ExtractedFileDirectory,
+                                                 usesSectorPadding, fileEntry.DataLength);
 
             using MemoryStream ms = new MemoryStream();
             using BinaryReader reader = new BinaryReader(File.OpenRead(FilePath));
@@ -100,7 +97,7 @@ namespace LodmodsDM
 
             if (extractToDrive)
             {
-                file.WriteGameFile(fullExtractedFilename);
+                file.WriteFile();
                 return null;
             } else return file;
         }
@@ -113,8 +110,9 @@ namespace LodmodsDM
             string name = fileEntry.FileIdentifier.Split(";")[0];
             string parentDirectory = fileParts.Length > 1 ? Path.Combine(fileParts[..^1]) : "";
 
-            GameFile file = ExtractDiscFile(filename);
-            byte[] updatedMSS = file.ReadMainGameFile("D:/Game ROMs/The Legend of Dragoon/game_files/USA/Disc 1/SECT/DRGN21.BIN");
+            MainGameFile file = ExtractDiscFile(filename);
+            // TODO: Something needs to handle all the stuff ReadFile used to handle
+            file.ReadFile("D:/Game ROMs/The Legend of Dragoon/game_files/USA/Disc 1/SECT/DRGN21.BIN");
             // TODO: need to report changes in file size for directory update
             // Can be done with if (DataLength != PVD whatever length)
             int fileOffset = (int)(fileEntry.ExtentLocation * 0x930);
@@ -162,5 +160,20 @@ namespace LodmodsDM
 
             brw.BaseStream.Seek(fileOffset, SeekOrigin.Begin);
         }
+
+    public static void Main()
+    {
+        Stopwatch sw = new Stopwatch();
+        Backup.BackupFile("D:/LodModding/Utils/lod_hack_tools/LOD1-4.iso", true);
+        Disc disc = new Disc("D:/LodModding/Utils/lod_hack_tools/LOD1-4.iso", "D:/Game ROMs/The Legend of Dragoon/game_files/USA/Disc 1");
+        //disc.ExtractDiscFile("SECT/DRGN21.BIN", true);
+
+        sw.Start();
+        disc.InsertDiscFile("SECT/DRGN21.BIN", true);
+        Console.WriteLine("Done");
+        sw.Stop();
+        Console.WriteLine(sw.Elapsed.TotalSeconds.ToString());
+        Console.ReadLine();
+    }
     }
 }
