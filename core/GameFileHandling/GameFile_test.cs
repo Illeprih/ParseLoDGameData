@@ -90,9 +90,10 @@ namespace LodmodsDM
             base(filename, discDirectory, extractedFileDirectory, dataLength)
         {
             UsesSectorPadding = usesSectorPadding;
+            DataSectorInfo = new List<SectorInfo>();
         }
 
-        public void SetIsForm2()
+        public void SetIsForm2FromFilesystem()
         {
             long currentOffset = Data.Position;
             Data.Seek(0, SeekOrigin.Begin);
@@ -101,6 +102,12 @@ namespace LodmodsDM
             IsForm2 = isRIFF.SequenceEqual(RIFF);
 
             Data.Seek(currentOffset, SeekOrigin.Begin); // Reset stream to previous offset
+        }
+
+        public void SetIsForm2FromDisc()
+        {
+            IsForm2 = Filename.Contains(".XA", StringComparison.OrdinalIgnoreCase) ||
+                Filename.Contains(".IKI", StringComparison.OrdinalIgnoreCase);
         }
 
         public static void Main()

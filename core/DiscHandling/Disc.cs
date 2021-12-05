@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
+using static LodmodsDM.Globals;
 
 namespace LodmodsDM
 {
@@ -59,6 +60,7 @@ namespace LodmodsDM
 
         public MainGameFile ExtractDiscFile(string filename, bool extractToDrive = false)
         {
+            // TODO: need to handle extracting XA data as well
             string[] fileParts = filename.Split("/");
 
             DirectoryTableEntry fileEntry = MatchPVDEntry(PVD.Root, fileParts);
@@ -68,31 +70,61 @@ namespace LodmodsDM
 
             MainGameFile file = new MainGameFile(name, discDirectory, ExtractedFileDirectory,
                                                  usesSectorPadding, fileEntry.DataLength);
+            file.SetIsForm2FromDisc();
+            if (file.IsForm2 && extractToDrive)
+            {
+                uint outputDataLength = file.DataLength / 0x800 * 0x930;
+                
+                file.Data.Write(RIFF);
+                file.Data.Write(BitConverter.GetBytes(outputDataLength + 0x24));
+                file.Data.Write(CDXAFMT);
+                file.Data.Write(new byte[4] { 0x10, 0x00, 0x00, 0x00 });
+                file.Data.Write(RIFF_SYSTEM_USE);
+                file.Data.Write(DATA);
+                file.Data.Write(BitConverter.GetBytes(outputDataLength));
+            }
 
-            using MemoryStream ms = new MemoryStream();
             using BinaryReader reader = new BinaryReader(File.OpenRead(FilePath));
             {
                 reader.BaseStream.Seek(fileEntry.ExtentLocation * 0x930, SeekOrigin.Begin);
 
                 int totalBytesLeft = (int)fileEntry.DataLength;
+                SectorInfo currentSector;
+                bool sectorIsForm2;
+                int sectorReadSize;
                 int bytesToRead;
                 while (totalBytesLeft > 0)
                 {
-                    file.DataSectorInfo.Add(new SectorInfo());
-                    file.DataSectorInfo[^1].ReadHeaderInfo(reader);
+                    if (totalBytesLeft < 0x800)
+                        Console.WriteLine("");
+                    currentSector = new SectorInfo();
+                    file.DataSectorInfo.Add(currentSector);
+                    currentSector.ReadHeaderInfo(reader);
+                    sectorIsForm2 = currentSector.Submode.Audio == 1 || currentSector.Submode.Video == 1;
+                    sectorReadSize = file.IsForm2 ? (sectorIsForm2 ? 0x92c : 0x818) : 0x800;
 
-                    bytesToRead = totalBytesLeft > 0x800 ? 0x800 : totalBytesLeft;
+                    if (file.IsForm2) reader.BaseStream.Seek(-0x18, SeekOrigin.Current); // Always read everything for XA/IKI
+
+                    bytesToRead = !file.IsForm2 ? 
+                        (totalBytesLeft > sectorReadSize ? sectorReadSize : totalBytesLeft) : 
+                        sectorReadSize;
                     byte[] data = reader.ReadBytes(bytesToRead);
-                    ms.Write(data);
+                    file.Data.Write(data);
 
-                    if (totalBytesLeft < 0x800) reader.ReadBytes(0x800 - (int)totalBytesLeft);
-                    file.DataSectorInfo[^1].ReadErrorCorrection(reader);
+                    // Should work because Form 2 files will always be sector-aligned
+                    if (!file.IsForm2 && totalBytesLeft < sectorReadSize) 
+                        reader.ReadBytes(sectorReadSize - totalBytesLeft);
+                    
+                    currentSector.ReadErrorCorrection(reader, (uint)sectorReadSize, sectorIsForm2);
+                    if (file.IsForm2) file.Data.Write(currentSector.EDC);
+                    if (file.IsForm2 && !sectorIsForm2) file.Data.Write(currentSector.ECC);
 
+                    // Size is given in multiples of 0x800 for XA/IKI files as well, even though they are longer.
+                    // Have to decrement by 0x800 regardless so it will work.
                     totalBytesLeft -= 0x800;
                 }
 
-                ms.Seek(0, SeekOrigin.Begin);
-                ms.CopyTo(file.Data);
+                file.Data.Seek(0, SeekOrigin.Begin);
             }
 
             if (extractToDrive)
@@ -112,7 +144,10 @@ namespace LodmodsDM
 
             MainGameFile file = ExtractDiscFile(filename);
             // TODO: Something needs to handle all the stuff ReadFile used to handle
+            // TODO: need to do something with fileOnDrive so that it can work with both file and stream
             file.ReadFile("D:/Game ROMs/The Legend of Dragoon/game_files/USA/Disc 1/SECT/DRGN21.BIN");
+
+            uint sectorDataSize = (uint)(file.IsForm2 ? 0x930 : 0x800);
             // TODO: need to report changes in file size for directory update
             // Can be done with if (DataLength != PVD whatever length)
             int fileOffset = (int)(fileEntry.ExtentLocation * 0x930);
@@ -166,14 +201,14 @@ namespace LodmodsDM
         Stopwatch sw = new Stopwatch();
         Backup.BackupFile("D:/LodModding/Utils/lod_hack_tools/LOD1-4.iso", true);
         Disc disc = new Disc("D:/LodModding/Utils/lod_hack_tools/LOD1-4.iso", "D:/Game ROMs/The Legend of Dragoon/game_files/USA/Disc 1");
-        //disc.ExtractDiscFile("SECT/DRGN21.BIN", true);
+        disc.ExtractDiscFile("OVL/S_ITEM.OV_", true);
 
-        sw.Start();
+        /*sw.Start();
         disc.InsertDiscFile("SECT/DRGN21.BIN", true);
         Console.WriteLine("Done");
         sw.Stop();
         Console.WriteLine(sw.Elapsed.TotalSeconds.ToString());
-        Console.ReadLine();
+        Console.ReadLine();*/
     }
     }
 }
