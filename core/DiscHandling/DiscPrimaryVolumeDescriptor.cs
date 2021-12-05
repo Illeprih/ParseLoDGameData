@@ -91,7 +91,7 @@ namespace LodmodsDM
             VolumeExpirationDate = new PVDDatetime(reader.ReadBytes(0x11));
             VolumeEffectiveDate = new PVDDatetime(reader.ReadBytes(0x11));
 
-            PVDSectorInfo.ReadErrorCorrection(reader);
+            PVDSectorInfo.ReadErrorCorrection(reader, 0x800, false);
         }
 
         public class PVDDatetime

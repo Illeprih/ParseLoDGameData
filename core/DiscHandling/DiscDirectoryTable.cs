@@ -77,7 +77,7 @@ namespace LodmodsDM
                 } else return;
             } while (reader.PeekChar() != 0x00);
 
-            if (EntryType != "File" && Children != null) ChildDirSectorInfo[^1].ReadErrorCorrection(reader);
+            if (EntryType != "File" && Children != null) ChildDirSectorInfo[^1].ReadErrorCorrection(reader, 0x800, false);
             reader.BaseStream.Seek(offset, SeekOrigin.Begin);
         }
 

@@ -89,11 +89,29 @@ namespace LodmodsDM
             reader.ReadBytes(0x4);
         }
 
-        public void ReadErrorCorrection(BinaryReader reader)
+        public static byte BCDToByte(byte bcd)
         {
-            reader.BaseStream.Seek(0x800 - (reader.BaseStream.Position % 0x930 - 0x18), SeekOrigin.Current);
+            byte tens = (byte)((bcd >> 4) * 10);
+            byte ones = (byte)(bcd & 0b00001111);
+
+            return (byte)(tens + ones);
+        }
+
+        public static byte ByteToBCD(byte hexByte)
+        {
+            byte upper = (byte)(hexByte / 10 << 4);
+            byte lower = (byte)(hexByte % 10);
+
+            return (byte)(upper + lower);
+        }
+
+        public void ReadErrorCorrection(BinaryReader reader, uint sectorReadSize, bool isForm2)
+        {
+            int headerCorrection = sectorReadSize == 0x800 ? 0x18 : 0x0;
+            reader.BaseStream.Seek(
+                reader.BaseStream.Position / 0x930 * 0x930 + headerCorrection + sectorReadSize, SeekOrigin.Begin);
             EDC = reader.ReadBytes(0x4);
-            ECC = reader.ReadBytes(0x114);
+            ECC = !isForm2 ? reader.ReadBytes(0x114) : null;
         }
 
         public byte[] CalculateEDC(byte[] data, int dataSize) 
