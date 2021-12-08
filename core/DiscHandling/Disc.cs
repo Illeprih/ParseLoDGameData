@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using static LodmodsDM.Globals;
+using static LodmodsDM.SectorInfo;
 
 namespace LodmodsDM
 {
@@ -54,32 +55,38 @@ namespace LodmodsDM
             if (fileParts.Length > 1)
             {
                 returnEntry = MatchPVDEntry(returnEntry, fileParts[1..]);
-                return returnEntry;
-            } else return returnEntry;
+            }
+
+            return returnEntry;
         }
 
         public MainGameFile ExtractDiscFile(string filename, bool extractToDrive = false)
         {
-            // TODO: need to handle extracting XA data as well
             string[] fileParts = filename.Split("/");
 
             DirectoryTableEntry fileEntry = MatchPVDEntry(PVD.Root, fileParts);
+            if (fileEntry is null)
+            {
+                Console.WriteLine($"File \"{filename}\" does not exist on disc.");
+                return null;
+            }
+
             string name = fileEntry.FileIdentifier.Split(";")[0].ToUpper();
             bool usesSectorPadding = name.Contains("DRGN");
             string discDirectory = fileParts.Length > 1 ? Path.Combine(fileParts[..^1]) : "";
 
             MainGameFile file = new MainGameFile(name, discDirectory, ExtractedFileDirectory,
                                                  usesSectorPadding, fileEntry.DataLength);
-            file.SetIsForm2FromDisc();
+            file.SetIsForm2(false);
             if (file.IsForm2 && extractToDrive)
-            {
+            { // Write metadata to Data stream if writing XA/RIFF file to drive
                 uint outputDataLength = file.DataLength / 0x800 * 0x930;
                 
                 file.Data.Write(RIFF);
                 file.Data.Write(BitConverter.GetBytes(outputDataLength + 0x24));
                 file.Data.Write(CDXAFMT);
                 file.Data.Write(new byte[4] { 0x10, 0x00, 0x00, 0x00 });
-                file.Data.Write(RIFF_SYSTEM_USE);
+                file.Data.Write(fileEntry.SystemUse);
                 file.Data.Write(DATA);
                 file.Data.Write(BitConverter.GetBytes(outputDataLength));
             }
@@ -95,8 +102,6 @@ namespace LodmodsDM
                 int bytesToRead;
                 while (totalBytesLeft > 0)
                 {
-                    if (totalBytesLeft < 0x800)
-                        Console.WriteLine("");
                     currentSector = new SectorInfo();
                     file.DataSectorInfo.Add(currentSector);
                     currentSector.ReadHeaderInfo(reader);
@@ -134,81 +139,145 @@ namespace LodmodsDM
             } else return file;
         }
 
-        public void InsertDiscFile(string filename, bool fileOnDrive)
+        public void InsertDiscFile(string filename, MainGameFile file=null)
         {
             string[] fileParts = filename.Split("/");
 
             DirectoryTableEntry fileEntry = MatchPVDEntry(PVD.Root, fileParts);
-            string name = fileEntry.FileIdentifier.Split(";")[0];
-            string parentDirectory = fileParts.Length > 1 ? Path.Combine(fileParts[..^1]) : "";
+            // string name = fileEntry.FileIdentifier.Split(";")[0];
+            // string parentDirectory = fileParts.Length > 1 ? Path.Combine(fileParts[..^1]) : "";
 
-            MainGameFile file = ExtractDiscFile(filename);
-            // TODO: Something needs to handle all the stuff ReadFile used to handle
-            // TODO: need to do something with fileOnDrive so that it can work with both file and stream
-            file.ReadFile("D:/Game ROMs/The Legend of Dragoon/game_files/USA/Disc 1/SECT/DRGN21.BIN");
+            // Read file from filesystem if file object not passed as argument.
+            // If file object passed, it should only be because a file is being extracted from disc,
+            // operated on, and inserted back without ever being written to the filesystem.
+            if (file is null)
+            { 
+                string fullExtractedFilename = Path.Combine(ExtractedFileDirectory, filename);
+                file = ExtractDiscFile(filename);
+                if (file is null) return;
 
+                file.ReadFile(fullExtractedFilename);
+                file.SetIsForm2(true);
+                if (file.IsForm2)
+                { // Remove RIFF header
+                    using MemoryStream ms = new MemoryStream();
+                    file.Data.Seek(0x2c, SeekOrigin.Begin);
+                    file.Data.CopyTo(ms);
+                    file.Data.Seek(0, SeekOrigin.Begin);
+                    file.Data.SetLength(ms.Length);
+                    ms.WriteTo(file.Data);
+                }
+            }
+
+            // The SectorInfo list should not be updated until this moment
             uint sectorDataSize = (uint)(file.IsForm2 ? 0x930 : 0x800);
-            // TODO: need to report changes in file size for directory update
-            // Can be done with if (DataLength != PVD whatever length)
+            uint riffOffset = (uint)(file.IsForm2 ? 0x2c : 0);
+            uint newSectorCount = (uint)Math.Ceiling((file.DataLength - riffOffset) / (float)sectorDataSize);
+            int sectorDiff = (int)newSectorCount - file.DataSectorInfo.Count;
+            
+            SectorInfo lastSector;
+            byte minutes = 0;
+            byte seconds = 0;
+            byte sectors = 0;
+            if (sectorDiff < 0)
+            {
+                file.DataSectorInfo.RemoveRange((int)newSectorCount, sectorDiff);
+                lastSector = file.DataSectorInfo[^1];
+                byte eofEOR = (byte)(lastSector.Submode.RealTime == 1 ? 0x80 : 0x81);
+                byte newSubmodeByte = (byte)(lastSector.Submode.SubmodeToByte() ^ eofEOR);
+                lastSector.Submode.ByteToSubmode(newSubmodeByte);
+            } else if (sectorDiff > 0)
+            {
+                if (file.IsForm2)
+                {
+                    file.Data.Seek(file.DataLength, SeekOrigin.Begin);
+                    SectorInfo newSectorInfo;
+                    for (int i = sectorDiff; i > 0; i--)
+                    {
+                        newSectorInfo = new SectorInfo();
+                        newSectorInfo.ReadHeaderInfo(file.Data);
+                        file.Data.Seek(0x918, SeekOrigin.Current);
+                    }
+                }
+                else
+                {
+                    lastSector = file.DataSectorInfo[^1];
+                    lastSector.Submode.ByteToSubmode((byte)(lastSector.Submode.SubmodeToByte() & 0x7e));
+                    minutes = BCDToByte(lastSector.Minutes);
+                    seconds = BCDToByte(lastSector.Seconds);
+                    sectors = BCDToByte(lastSector.Sectors);
+
+                    for (int i = sectorDiff; i > 0; i--)
+                    {
+                        minutes = seconds == 59 && sectors == 73 ? (byte)(minutes + 1) : minutes;
+                        seconds = sectors == 73 ? (seconds == 59 ? (byte)0 : (byte)(seconds + 1)) : seconds;
+                        sectors = sectors == 73 ? (byte)0 : (byte)(sectors + 1);
+                        byte bcdSectors = ByteToBCD(sectors);
+                        byte bcdSeconds = ByteToBCD(seconds);
+                        byte bcdMinutes = ByteToBCD(minutes);
+                        SubmodeByte submode = i == 1 ? SubmodeByte.GenerateSubmode(0x89)
+                            : SubmodeByte.GenerateSubmode(0x8); // These are the only submode values in form 1 sectors
+                        SectorInfo newSector = new SectorInfo(SYNC_PATTERN, bcdMinutes, bcdSeconds, bcdSectors,
+                            lastSector.Mode, lastSector.FileNumber, lastSector.ChannelNumber, submode, lastSector.CodingInfo);
+                        file.DataSectorInfo.Add(newSector);
+                    }
+                }
+            }
+            file.Data.Seek(0, SeekOrigin.Begin);
+
+            sbyte fileSizeChanged = (sbyte)(file.DataLength != fileEntry.DataLength ?
+                (file.DataLength < fileEntry.DataLength ? -1 : 1) : 0);
             int fileOffset = (int)(fileEntry.ExtentLocation * 0x930);
 
             // TODO: Need to update all sectors that exist after file inserted
             // if (!updatedMSS.All(i => i == 0))
             using BinaryReader brw = new BinaryReader(File.Open(FilePath, FileMode.Open, FileAccess.ReadWrite));
             byte[] dataToShift;
-            if (file.DataLength > fileEntry.DataLength)
+            if (sectorDiff > 0)
             {
-                brw.BaseStream.Seek(fileOffset + fileEntry.DataLength / 0x800 * 0x930, SeekOrigin.Begin);  // TODO: I think this needs adjusting based on Form 1 vs Form 2
+                brw.BaseStream.Seek(fileOffset + fileEntry.DataLength / 0x800 * 0x930, SeekOrigin.Begin);
                 dataToShift = brw.ReadBytes((int)(brw.BaseStream.Length - brw.BaseStream.Position));
             } else dataToShift = new byte[0];
             brw.BaseStream.Seek(fileOffset, SeekOrigin.Begin);
 
-            int sectorIndex = 0;
             int dataSize;
             foreach (SectorInfo info in file.DataSectorInfo)
             {
                 dataSize = info.Submode.Form2 == 1 ? 0x914 : 0x800;
 
                 byte[] subheader = { info.FileNumber, info.ChannelNumber, info.Submode.SubmodeToByte(), info.CodingInfo,
-                                        info.FileNumber, info.ChannelNumber, info.Submode.SubmodeToByte(), info.CodingInfo };
+                                     info.FileNumber, info.ChannelNumber, info.Submode.SubmodeToByte(), info.CodingInfo };
                 brw.ReadBytes(0x10);
                 brw.BaseStream.Write(subheader, 0, 0x8);
 
+                // It may be possible to shortcut Form 2 writes by just writing the whole thing.
+                // It depends on whether modifying XA files will involve updating the sector info,
+                // Which it probably should. Will leave for now, though.
                 byte[] data = new byte[dataSize];
-                if (dataSize == 0x914) file.Data.Seek(0x18, SeekOrigin.Current);
+                if (file.IsForm2) file.Data.Seek(0x18, SeekOrigin.Current); // Skip header
                 file.Data.Read(data, 0, dataSize);
-                if (dataSize == 0x914) file.Data.Seek(0x4, SeekOrigin.Current);
+                if (file.IsForm2) // Skip EDC/ECC
+                {
+                    if (dataSize == 0x914) file.Data.Seek(0x4, SeekOrigin.Current);
+                    else file.Data.Seek(0x118, SeekOrigin.Current);
+                }
+
                 brw.BaseStream.Write(data);
 
-                info.CalculateEDC(data, dataSize);
-                brw.BaseStream.Write(info.EDC);
                 if (dataSize == 0x800)
-                {
+                { // Calculate EDC/ECC only for form 1 sectors, LoD 0s out form 2 EDC
+                    info.CalculateEDC(data, dataSize);
+                    brw.BaseStream.Write(info.EDC);
                     info.CalculateECC(data);
                     brw.BaseStream.Write(info.ECC);
-                }
-                sectorIndex++;
+                } else brw.ReadBytes(4);
             }
 
+            //TODO: update size in PVD, as well as offsets of subsequent files if necessary
+
+            // Can use this equation universally because form 2 file size still given in increments of 0x800
             brw.BaseStream.Seek(fileOffset + file.DataLength / 0x800 * 0x930, SeekOrigin.Begin);
             brw.BaseStream.Write(dataToShift);
-
-            brw.BaseStream.Seek(fileOffset, SeekOrigin.Begin);
         }
-
-    public static void Main()
-    {
-        Stopwatch sw = new Stopwatch();
-        Backup.BackupFile("D:/LodModding/Utils/lod_hack_tools/LOD1-4.iso", true);
-        Disc disc = new Disc("D:/LodModding/Utils/lod_hack_tools/LOD1-4.iso", "D:/Game ROMs/The Legend of Dragoon/game_files/USA/Disc 1");
-        disc.ExtractDiscFile("OVL/S_ITEM.OV_", true);
-
-        /*sw.Start();
-        disc.InsertDiscFile("SECT/DRGN21.BIN", true);
-        Console.WriteLine("Done");
-        sw.Stop();
-        Console.WriteLine(sw.Elapsed.TotalSeconds.ToString());
-        Console.ReadLine();*/
-    }
     }
 }

@@ -45,6 +45,9 @@ namespace LodmodsDM
             using BinaryReader reader = new BinaryReader(File.Open(filename, FileMode.Open));
 
             reader.BaseStream.Seek(0, SeekOrigin.Begin);
+            Data.Seek(0, SeekOrigin.Begin);
+            DataLength = (uint)reader.BaseStream.Length;
+            Data.SetLength(DataLength);
             reader.BaseStream.CopyTo(Data);
 
             Data.Seek(0, SeekOrigin.Begin);
@@ -93,21 +96,24 @@ namespace LodmodsDM
             DataSectorInfo = new List<SectorInfo>();
         }
 
-        public void SetIsForm2FromFilesystem()
+        public void SetIsForm2(bool fromFilesystem)
         {
             long currentOffset = Data.Position;
-            Data.Seek(0, SeekOrigin.Begin);
-            byte[] isRIFF = new byte[4];
-            Data.Read(isRIFF);
-            IsForm2 = isRIFF.SequenceEqual(RIFF);
+
+            if (fromFilesystem)
+            {
+                Data.Seek(0, SeekOrigin.Begin);
+                byte[] isRIFF = new byte[4];
+                Data.Read(isRIFF);
+                IsForm2 = isRIFF.SequenceEqual(RIFF);
+            }
+            else
+            {
+                Data.Seek(0x12, SeekOrigin.Begin);
+                IsForm2 = (Data.ReadByte() & 0x76) != 0;
+            }
 
             Data.Seek(currentOffset, SeekOrigin.Begin); // Reset stream to previous offset
-        }
-
-        public void SetIsForm2FromDisc()
-        {
-            IsForm2 = Filename.Contains(".XA", StringComparison.OrdinalIgnoreCase) ||
-                Filename.Contains(".IKI", StringComparison.OrdinalIgnoreCase);
         }
 
         public static void Main()
