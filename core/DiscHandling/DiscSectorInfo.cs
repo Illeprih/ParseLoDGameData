@@ -89,6 +89,20 @@ namespace LodmodsDM
             reader.ReadBytes(0x4);
         }
 
+        public void ReadHeaderInfo(MemoryStream data)
+        {
+            data.Read(SyncPattern);
+            Minutes = (byte)data.ReadByte();
+            Seconds = (byte)data.ReadByte();
+            Sectors = (byte)data.ReadByte();
+            Mode = (byte)data.ReadByte();
+            FileNumber = (byte)data.ReadByte();
+            ChannelNumber = (byte)data.ReadByte();
+            Submode = new SubmodeByte((byte)data.ReadByte());
+            CodingInfo = (byte)data.ReadByte();
+            data.Read(new byte[4]);
+        }
+
         public static byte BCDToByte(byte bcd)
         {
             byte tens = (byte)((bcd >> 4) * 10);
@@ -118,7 +132,7 @@ namespace LodmodsDM
         {
             byte[] edcData = new byte[dataSize + 8];
             byte[] subheader = new byte[8] { FileNumber, ChannelNumber, Submode.SubmodeToByte(), CodingInfo,
-                                                FileNumber, ChannelNumber, Submode.SubmodeToByte(), CodingInfo };
+                                             FileNumber, ChannelNumber, Submode.SubmodeToByte(), CodingInfo };
             Buffer.BlockCopy(subheader, 0, edcData, 0, 0x8);
             Buffer.BlockCopy(data, 0, edcData, 0x8, dataSize);
 
