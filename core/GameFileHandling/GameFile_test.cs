@@ -96,24 +96,27 @@ namespace LodmodsDM
             DataSectorInfo = new List<SectorInfo>();
         }
 
-        public void SetIsForm2(bool fromFilesystem)
+        public void SetIsForm2()
         {
             long currentOffset = Data.Position;
 
-            if (fromFilesystem)
-            {
-                Data.Seek(0, SeekOrigin.Begin);
-                byte[] isRIFF = new byte[4];
-                Data.Read(isRIFF);
-                IsForm2 = isRIFF.SequenceEqual(RIFF);
-            }
-            else
-            {
-                Data.Seek(0x12, SeekOrigin.Begin);
-                IsForm2 = (Data.ReadByte() & 0x76) != 0;
-            }
+            Data.Seek(0, SeekOrigin.Begin);
+            byte[] isRIFF = new byte[4];
+            Data.Read(isRIFF);
+            IsForm2 = isRIFF.SequenceEqual(RIFF);
 
             Data.Seek(currentOffset, SeekOrigin.Begin); // Reset stream to previous offset
+        }
+
+        public void SetIsForm2(BinaryReader reader)
+        {
+            long currentOffset = reader.BaseStream.Position;
+
+            reader.BaseStream.Seek(0x12, SeekOrigin.Begin);
+            byte flagByte = reader.ReadByte();
+            IsForm2 = (flagByte & 0x76) != 0;
+
+            reader.BaseStream.Seek(currentOffset, SeekOrigin.Begin); // Reset stream to previous offset
         }
 
         public static void Main()
