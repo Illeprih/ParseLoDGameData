@@ -301,30 +301,5 @@ namespace LodmodsDM
             brw.BaseStream.Seek(fileOffset + file.DataLength / 0x800 * 0x930, SeekOrigin.Begin);
             brw.BaseStream.Write(dataToShift);
         }
-
-        public void InsertDiscFiles(string[] filenames, Dictionary<string, MainGameFile> gameFileDict)
-        { // For real-time use, can use this to extract list, then operate on whichever ones, and 
-            // insert whichever ones are desired back in whenever
-            Dictionary<string, MainGameFile> discFileList = new Dictionary<string, MainGameFile>();
-            foreach (string filename in filenames)
-            {
-                // TODO: This should be where the logic for segmenting the disc file is
-            }
-            // TODO: This should be where the logic for updating the MSS info is, and maybe the PVD info (maybe)
-        }
-
-        public static void Main()
-        {
-            Stopwatch sw = new Stopwatch();
-            Backup.BackupFile("D:/LodModding/Utils/lod_hack_tools/LOD1-4.iso", true);
-            Disc disc = new Disc("D:/LodModding/Utils/lod_hack_tools/LOD1-4.iso", "D:/Game ROMs/The Legend of Dragoon/game_files/USA/Disc 1");
-            Dictionary<string, MainGameFile> fileDict = disc.ExtractDiscFiles(new string[] { "OVL/S_ITEM.OV_", "SECT/DRGN1.BIN", "OHTA/MCX/DABAS.BIN", "SCUS_944.91"}, false);
-
-            sw.Start();
-            //disc.InsertDiscFile("XA/LODXA00.XA", null);
-            Console.WriteLine("Done");
-            sw.Stop();
-            Console.WriteLine(sw.Elapsed.TotalSeconds.ToString());
-        }
     }
 }
