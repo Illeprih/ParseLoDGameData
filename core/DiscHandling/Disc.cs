@@ -159,38 +159,8 @@ namespace LodmodsDM
 
         public void InsertForm2() { }
 
-        // TODO: need to always pass things like extract/insert disc file or game file through an 'all'
-        // method, so that using an individual function is just an 'all' call with one list item.
-        // This will allow flexibility in expanding file sizes and such without having to duplicate or
-        // spaghettify logic
-        private void InsertDiscFile(string filename, MainGameFile file=null)
+        private void InsertDiscFile(DirectoryTableEntry fileEntry, MainGameFile file)
         {
-            string[] fileParts = filename.Split("/");
-
-            DirectoryTableEntry fileEntry = MatchPVDEntry(PVD.Root, fileParts);
-
-            // Read file from filesystem if file object not passed as argument.
-            // If file object passed, it should only be because a file is being extracted from disc,
-            // operated on, and inserted back without ever being written to the filesystem.
-            if (file is null)
-            { 
-                string fullExtractedFilename = Path.Combine(ExtractedFileDirectory, filename);
-                file = ExtractDiscFile(filename);
-                if (file is null) return;
-
-                file.ReadFile(fullExtractedFilename);
-                file.SetIsForm2();
-                if (file.IsForm2)
-                { // Remove RIFF header
-                    using MemoryStream ms = new MemoryStream();
-                    file.Data.Seek(0x2c, SeekOrigin.Begin);
-                    file.Data.CopyTo(ms);
-                    file.Data.Seek(0, SeekOrigin.Begin);
-                    file.Data.SetLength(ms.Length);
-                    ms.WriteTo(file.Data);
-                }
-            }
-
             // The SectorInfo list should not be updated until this moment
             uint sectorDataSize = (uint)(file.IsForm2 ? 0x930 : 0x800);
             uint riffOffset = (uint)(file.IsForm2 ? 0x2c : 0);
@@ -249,10 +219,10 @@ namespace LodmodsDM
 
             sbyte fileSizeChanged = (sbyte)(file.DataLength != fileEntry.DataLength ?
                 (file.DataLength < fileEntry.DataLength ? -1 : 1) : 0);
+
+            // TODO: This should go in outer method
             int fileOffset = (int)(fileEntry.ExtentLocation * 0x930);
 
-            // TODO: Need to update all sectors that exist after file inserted
-            // if (!updatedMSS.All(i => i == 0))
             using BinaryReader brw = new BinaryReader(File.Open(FilePath, FileMode.Open, FileAccess.ReadWrite));
             byte[] dataToShift;
             if (sectorDiff > 0)
@@ -300,6 +270,75 @@ namespace LodmodsDM
             // Can use this equation universally because form 2 file size still given in increments of 0x800
             brw.BaseStream.Seek(fileOffset + file.DataLength / 0x800 * 0x930, SeekOrigin.Begin);
             brw.BaseStream.Write(dataToShift);
+        }
+
+        public void InsertDiscFiles(string[] filenames, Dictionary<string, MainGameFile> gameFileDict=null)
+        { // For real-time use, can use this to extract list, then operate on whichever ones, and 
+            // insert whichever ones are desired back in whenever
+
+            Dictionary<string, object[]> entryFileDict = new Dictionary<string, object[]>();
+            List<uint[]> expansionCutList = new List<uint[]>();
+            List<byte[]> expansionSegmentList = new List<byte[]>();
+            // TODO: Should try to sort filename list first. Might help reduce number of loops.
+            // Need to sample out files in dict that are in filenames if there is a dict. otherwise,  make a dict
+            // via extraction (so that bit of code needs to move here)
+            foreach (string filename in filenames)
+            {
+                string[] fileParts = filename.Split("/");
+                DirectoryTableEntry fileEntry = MatchPVDEntry(PVD.Root, fileParts);
+
+                // Read file from filesystem if file object not passed as argument.
+                // If file object passed, it should only be because a file is being extracted from disc,
+                // operated on, and inserted back without ever being written to the filesystem.
+                MainGameFile gameFile;
+                if (gameFileDict is null)
+                {
+                    string fullExtractedFilename = Path.Combine(ExtractedFileDirectory, filename);
+                    gameFile = ExtractDiscFile(filename);
+                    if (gameFile is null) continue;
+
+                    gameFile.ReadFile(fullExtractedFilename);
+                    gameFile.SetIsForm2();
+                    if (gameFile.IsForm2)
+                    { // Remove RIFF header
+                        using MemoryStream ms = new MemoryStream();
+                        gameFile.Data.Seek(0x2c, SeekOrigin.Begin);
+                        gameFile.Data.CopyTo(ms);
+                        gameFile.Data.Seek(0, SeekOrigin.Begin);
+                        gameFile.Data.SetLength(ms.Length);
+                        ms.WriteTo(gameFile.Data);
+                    }
+                } else gameFile = gameFileDict[filename];
+
+                entryFileDict[filename] = new object[] { fileEntry, gameFile };
+            }
+
+            var sortedEntryFileDict = from entry in entryFileDict orderby ((DirectoryTableEntry)entry.Value[0]).ExtentLocation ascending select entry;
+
+
+            foreach (var file in sortedEntryFileDict)
+            {
+                DirectoryTableEntry fileEntry = ((DirectoryTableEntry)file.Value[0]);
+                if (expansionCutList.Count > 0) expansionCutList[^1][1] = fileEntry.ExtentLocation * 0x930;
+                expansionCutList.Add(new uint[2] { fileEntry.ExtentLocation * 0x930 + (fileEntry.DataLength / 0x800 * 0x930), 0 });
+                // TODO: This should be where the logic for segmenting the disc file is
+            }
+            // TODO: This should be where the logic for updating the MSS info is, and maybe the PVD info (maybe)
+            
+        }
+
+        public static void Main()
+        {
+            Stopwatch sw = new Stopwatch();
+            Backup.BackupFile("D:/LodModding/Utils/lod_hack_tools/LOD1-4.iso", true);
+            Disc disc = new Disc("D:/LodModding/Utils/lod_hack_tools/LOD1-4.iso", "D:/Game ROMs/The Legend of Dragoon/game_files/USA/Disc 1");
+            Dictionary<string, MainGameFile> fileDict = disc.ExtractDiscFiles(new string[] { "OVL/S_ITEM.OV_", "SECT/DRGN1.BIN", "OHTA/MCX/DABAS.BIN", "SCUS_944.91"}, false);
+
+            sw.Start();
+            disc.InsertDiscFiles(new string[] { "OVL/S_ITEM.OV_", "SECT/DRGN1.BIN", "OHTA/MCX/DABAS.BIN" }, fileDict);
+            Console.WriteLine("Done");
+            sw.Stop();
+            Console.WriteLine(sw.Elapsed.TotalSeconds.ToString());
         }
     }
 }
